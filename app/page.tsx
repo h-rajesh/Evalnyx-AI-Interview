@@ -92,14 +92,14 @@ export default function LandingPage() {
               variant="ghost"
               className="hidden rounded-xl sm:inline-flex"
             >
-              <Link href="/login">Sign in</Link>
+              <Link href="/auth/signin">Sign in</Link>
             </Button>
 
             <Button
               asChild
               className="rounded-xl gradient-primary text-primary-foreground"
             >
-              <Link href="/register">Get started</Link>
+              <Link href="/auth/signup">Get started</Link>
             </Button>
           </div>
         </div>
@@ -138,7 +138,7 @@ export default function LandingPage() {
                 size="lg"
                 className="rounded-xl gradient-primary text-primary-foreground"
               >
-                <Link href="/register">
+                <Link href="/auth/signin">
                   Start practicing
                   <ArrowRight className="ml-1.5 h-4 w-4" />
                 </Link>
@@ -223,7 +223,7 @@ export default function LandingPage() {
               variant="secondary"
               className="rounded-xl"
             >
-              <Link href="/register">
+              <Link href="/auth/signup">
                 Create free account
                 <ArrowRight className="ml-1.5 h-4 w-4" />
               </Link>
@@ -235,7 +235,7 @@ export default function LandingPage() {
       <footer className="border-t border-border/60">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6">
           <Logo />
-          <p>© 2026 MockMind. Built for ambitious candidates.</p>
+          <p>© 2026 Evalynx. Built for ambitious candidates.</p>
         </div>
       </footer>
     </div>
