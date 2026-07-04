@@ -9,7 +9,7 @@ export function Logo({ className, showText = true }: { className?: string; showT
       </div>
       {showText && (
         <span className="font-display text-lg font-bold tracking-tight">
-          Mock<span className="gradient-text">Mind</span>
+          Eval<span className="gradient-text">ynx</span>
         </span>
       )}
     </div>

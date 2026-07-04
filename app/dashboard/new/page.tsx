@@ -108,6 +108,10 @@ export default function NewInterviewPage() {
       description: "Your AI interviewer is ready.",
     });
 
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("completed_interview_new");
+    }
+
     router.push("/interview/new");
   };
 

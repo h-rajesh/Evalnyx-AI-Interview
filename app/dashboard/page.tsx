@@ -32,16 +32,13 @@ import {
 import {
   stats,
   recentInterviews,
-  currentUser,
 } from "@/lib/mock-data";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { DashboardGreeting } from "@/components/features/DashboardGreeting";
+import { DashboardResumeCard } from "@/components/features/DashboardResumeCard";
 
 const statIcons = [Trophy, Target, Clock, Activity];
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions)
-  console.log("DASHBOARD SESSION:", JSON.stringify(session, null, 2));
   return (
     <div className="space-y-8">
       <MotionDiv
@@ -50,13 +47,7 @@ export default async function DashboardPage() {
         className="relative overflow-hidden rounded-2xl border border-border/60 gradient-primary p-6 text-primary-foreground shadow-elevated sm:p-8"
       >
         <div className="relative z-10 max-w-xl">
-          <p className="text-sm font-medium opacity-90">
-            Welcome back,
-          </p>
-
-          <h1 className="mt-1 font-display text-2xl font-bold sm:text-3xl">
-            {session?.user?.name?.split(" ")[0]} 👋
-          </h1>
+          <DashboardGreeting />
 
           <p className="mt-2 text-sm opacity-90">
             You're on a 6-week improvement streak. Ready to sharpen your
@@ -124,54 +115,7 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/60 shadow-soft">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Upload className="h-4 w-4 text-primary" />
-              Resume
-            </CardTitle>
-
-            <CardDescription>
-              Used to tailor your questions
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/40 p-3">
-              <div className="grid h-10 w-10 place-items-center rounded-lg bg-accent text-accent-foreground">
-                <FileText className="h-5 w-5" />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">
-                  {currentUser.resumeName}
-                </p>
-
-                <p className="text-xs text-muted-foreground">
-                  Uploaded · 248 KB
-                </p>
-              </div>
-            </div>
-
-            <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-6 text-center transition-colors hover:bg-muted/40">
-              <Upload className="h-5 w-5 text-muted-foreground" />
-
-              <span className="mt-2 text-sm font-medium">
-                Replace resume
-              </span>
-
-              <span className="text-xs text-muted-foreground">
-                PDF, DOCX up to 5MB
-              </span>
-
-              <input
-                type="file"
-                className="hidden"
-                accept=".pdf,.docx"
-              />
-            </label>
-          </CardContent>
-        </Card>
+        <DashboardResumeCard />
       </div>
 
       <Card className="border-border/60 shadow-soft">

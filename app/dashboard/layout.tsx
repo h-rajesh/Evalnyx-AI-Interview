@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import {
   LayoutDashboard,
@@ -27,7 +27,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { currentUser } from "@/lib/mock-data";
+import { useUserStore } from "@/app/store/useUserStore";
 
 const nav = [
   {
@@ -65,9 +65,14 @@ function SidebarNav({
 }) {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const user = session?.user;
-  const initials = user?.name
-    ? user.name
+  const sessionUser = session?.user;
+  const { user: storeUser } = useUserStore();
+
+  const userDisplayName = storeUser.name || sessionUser?.name || "Alex Morgan";
+  const userEmail = storeUser.email || sessionUser?.email || "alex.morgan@example.com";
+
+  const initials = userDisplayName
+    ? userDisplayName
         .split(" ")
         .map((n) => n[0])
         .join("")
@@ -129,11 +134,11 @@ function SidebarNav({
 
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">
-              {user?.name || currentUser.name}
+              {userDisplayName}
             </p>
 
             <p className="truncate text-xs text-muted-foreground">
-              {user?.email || currentUser.email}
+              {userEmail}
             </p>
           </div>
 
@@ -158,6 +163,18 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const { status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/auth/signin");
+    }
+  }, [status, router]);
+
+  if (status === "unauthenticated") {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background">
