@@ -12,6 +12,7 @@ import { AuthShell } from "@/components/features/AuthShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SocialAuthButtons } from "@/components/features/SocialAuthButtons";
 
 const schema = z
   .object({
@@ -69,6 +70,7 @@ export default function RegisterPage() {
 
   return (
     <AuthShell
+      
       title="Create your account"
       subtitle="Start practicing interviews in minutes."
       footer={
@@ -83,6 +85,7 @@ export default function RegisterPage() {
         </>
       }
     >
+      <SocialAuthButtons/>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="name">Full name</Label>

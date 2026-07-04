@@ -13,6 +13,7 @@ import { AuthShell } from "@/components/features/AuthShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SocialAuthButtons } from "@/components/features/SocialAuthButtons";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -64,7 +65,7 @@ export default function LoginPage() {
         <>
           Don't have an account?{" "}
           <Link
-            href="/register"
+            href="/auth/signup"
             className="font-semibold text-primary hover:underline"
           >
             Create one
@@ -72,6 +73,7 @@ export default function LoginPage() {
         </>
       }
     >
+      <SocialAuthButtons/>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>
