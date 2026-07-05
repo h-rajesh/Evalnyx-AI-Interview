@@ -25,26 +25,46 @@ export default function ForgotPasswordPage() {
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
   });
 
-  const onSubmit = async (_values: FormValues) => {
-    // TODO: Replace with your API call
-    await new Promise((resolve) => setTimeout(resolve, 600));
+  const onSubmit = async (values: FormValues) => {
+    try {
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(values),
+      });
 
-    setSent(true);
-    toast.success("Reset link sent");
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.message || "Something went wrong.");
+        return;
+      }
+
+      setSent(true);
+      reset();
+
+      toast.success(data.message);
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to send reset email. Please try again.");
+    }
   };
 
   return (
     <AuthShell
       title="Forgot password"
-      subtitle="We'll email you a link to reset your password."
+      subtitle="Enter your email address and we'll send you a password reset link."
       footer={
         <Link
-          href="/login"
+          href="/auth/signin"
           className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
@@ -53,21 +73,30 @@ export default function ForgotPasswordPage() {
       }
     >
       {sent ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-6 text-center">
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-border/60 bg-muted/30 p-6 text-center">
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-accent text-accent-foreground">
             <MailCheck className="h-6 w-6" />
           </div>
 
-          <p className="text-sm font-medium">Check your inbox</p>
+          <h3 className="text-lg font-semibold">
+            Check your inbox
+          </h3>
 
           <p className="text-sm text-muted-foreground">
-            We sent a password reset link to your email.
+            If an account exists for that email, we've sent a password reset
+            link.
           </p>
 
-          <Button asChild variant="outline" className="mt-2 rounded-xl">
-            <Link href="/reset-password">
-              Continue to reset
-            </Link>
+          <p className="text-xs text-muted-foreground">
+            Please check your inbox and spam folder.
+          </p>
+
+          <Button
+            variant="outline"
+            className="mt-2 rounded-xl"
+            onClick={() => setSent(false)}
+          >
+            Send another email
           </Button>
         </div>
       ) : (

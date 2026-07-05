@@ -1,22 +1,29 @@
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { VerificationTokenType } from "@/app/generated/prisma/enums";
 import { generateVerificationToken } from "@/lib/token";
 import { sendVerificationEmail } from "@/lib/email";
+import { RegisterSchema } from "@/lib/validations/auth";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { name, email, password } = await req.json();
+    // Zod validation — replaces manual !name || !email || !password checks
+    const body = await req.json();
+    const result = RegisterSchema.safeParse(body);
 
-    if (!name || !email || !password) {
+    if (!result.success) {
       return NextResponse.json(
-        { message: "All fields are required." },
-        { status: 400 }
+        {
+          message: "Validation failed.",
+          errors: result.error.flatten().fieldErrors,
+        },
+        { status: 422 }
       );
     }
 
+    const { name, email, password } = result.data;
     const normalizedEmail = email.toLowerCase().trim();
 
     const existingUser = await prisma.user.findUnique({

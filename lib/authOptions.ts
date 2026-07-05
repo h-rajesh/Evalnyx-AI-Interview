@@ -5,6 +5,8 @@ import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import GoogleProvider from "next-auth/providers/google";
 import GitHubProvider from "next-auth/providers/github";
+import { loginLimiter } from "@/lib/ratelimit";
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
 
@@ -26,10 +28,18 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
 
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          console.log("Auth: Missing email or password");
-          return null;
+      async authorize(credentials, req) {
+        if (!credentials?.email || !credentials?.password) return null;
+
+        // Login rate limit — keyed on IP, falls back to a stable dev key
+        const ip =
+          (req?.headers?.["x-forwarded-for"] as string | undefined)
+            ?.split(",")[0]
+            .trim() ?? "127.0.0.1";
+
+        const { success } = await loginLimiter.limit(ip);
+        if (!success) {
+          throw new Error("Too many login attempts. Please try again later.");
         }
 
         try {
@@ -37,37 +47,21 @@ export const authOptions: NextAuthOptions = {
             where: { email: credentials.email },
           });
 
-          if (!user) {
-            console.log("Auth: User not found for email:", credentials.email);
-            return null;
-          }
-
-          if (!user.password) {
-            console.log("Auth: User has no password set");
-            return null;
-          }
+          if (!user) return null;
+          if (!user.password) return null;
 
           const isValid = await bcrypt.compare(
             credentials.password,
             user.password,
           );
 
-          if (!isValid) {
-            console.log("Auth: Password mismatch for user:", credentials.email);
-            return null;
-          }
-
-          console.log(
-            "Auth: Successfully authenticated user:",
-            user.email,
-            
-          );
+          if (!isValid) return null;
 
           return {
             id: user.id,
             name: user.name,
             email: user.email,
-           
+            emailVerified: user.emailVerified,
           };
         } catch (error) {
           console.error("Auth error:", error);
@@ -82,23 +76,42 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    async jwt({ token, user }) {
-      console.log("JWT CALLBACK - token:", JSON.stringify(token), "user:", JSON.stringify(user));
-      if (user) {
-        token.id = user.id;
-        token.name = user.name;
-        token.email = user.email;
+    /**
+     * JWT callback — only queries the DB on the initial sign-in/sign-up trigger.
+     * Subsequent token refreshes reuse the values already stored in the JWT,
+     * avoiding a DB round-trip on every session check.
+     * OAuth providers (Google, GitHub) have emailVerified set by PrismaAdapter
+     * at account-creation time, so they are never redirected to the verify notice.
+     */
+    async jwt({ token, user, trigger }) {
+      // On initial sign-in or when explicitly triggered, fetch fresh data from DB
+      if (trigger === "signIn" || trigger === "signUp" || user) {
+        const email = user?.email ?? token.email;
+        if (!email) return token;
+
+        const dbUser = await prisma.user.findUnique({
+          where: { email },
+        });
+
+        if (dbUser) {
+          token.id = dbUser.id;
+          token.name = dbUser.name;
+          token.email = dbUser.email;
+          token.emailVerified = dbUser.emailVerified;
+        }
       }
+
       return token;
     },
 
     async session({ session, token }) {
-      console.log("SESSION CALLBACK - session:", JSON.stringify(session), "token:", JSON.stringify(token));
       if (session.user) {
         session.user.id = token.id as string;
         session.user.name = token.name as string;
         session.user.email = token.email as string;
+        session.user.emailVerified = token.emailVerified as Date | null;
       }
+
       return session;
     },
   },

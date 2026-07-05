@@ -1,13 +1,18 @@
 import NextAuth, { DefaultSession } from "next-auth";
+import { DefaultJWT } from "next-auth/jwt";
 
-// Extend the default session type
 declare module "next-auth" {
   interface Session {
-    user: {
+    user: DefaultSession["user"] & {
       id: string;
-      name: string;
-      email: string;
-      // add more fields if you store them in your DB
-    } & DefaultSession["user"];
+      emailVerified: Date | null;
+    };
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT extends DefaultJWT {
+    id: string;
+    emailVerified: Date | null;
   }
 }

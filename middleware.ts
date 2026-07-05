@@ -1,14 +1,34 @@
 import { withAuth } from "next-auth/middleware";
+import { NextResponse } from "next/server";
 
-export default withAuth({
-  callbacks: {
-    authorized: ({ token }) => !!token,
+export default withAuth(
+  function middleware(req) {
+    const token = req.nextauth.token;
+
+    if (
+      token &&
+      !token.emailVerified &&
+      req.nextUrl.pathname !== "/verify-email-notice"
+    ) {
+      return NextResponse.redirect(
+        new URL("/verify-email-notice", req.url)
+      );
+    }
   },
-  pages: {
-    signIn: "/auth/signin",
-  },
-});
+  {
+    callbacks: {
+      authorized: ({ token }) => !!token,
+    },
+    pages: {
+      signIn: "/auth/signin",
+    },
+  }
+);
 
 export const config = {
-  matcher: ["/dashboard/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/profile/:path*",
+    "/interview/:path*",
+  ],
 };

@@ -1,27 +1,58 @@
-import { VerificationTokenType } from "@/app/generated/prisma/enums";
-import prisma from "@/lib/prisma";
-import { sendVerificationEmail } from "@/lib/email";
-import { generateVerificationToken } from "@/lib/token";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+
+import prisma from "@/lib/prisma";
+import { generateVerificationToken } from "@/lib/token";
+import { sendVerificationEmail } from "@/lib/email";
+import { resendLimiter } from "@/lib/ratelimit";
+import { VerificationTokenType } from "@/app/generated/prisma/enums";
+
+const schema = z.object({
+  email: z.string().email(),
+});
 
 export async function POST(req: NextRequest) {
   try {
-    const { email } = await req.json();
+    const body = await req.json();
+    const result = schema.safeParse(body);
 
-    if (!email) {
+    if (!result.success) {
       return NextResponse.json(
-        { message: "Email is required." },
-        { status: 400 }
+        { message: "A valid email address is required." },
+        { status: 422 }
       );
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = result.data.email.toLowerCase().trim();
+
+
+    // Rate limit keyed on the normalised email address
+    const { success, remaining, reset } = await resendLimiter.limit(
+      normalizedEmail
+    );
+
+    if (!success) {
+      const retryAfterSec = Math.ceil((reset - Date.now()) / 1000);
+      return NextResponse.json(
+        {
+          message: "Too many requests. Please try again later.",
+          retryAfter: retryAfterSec,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(retryAfterSec),
+            "X-RateLimit-Remaining": String(remaining),
+          },
+        }
+      );
+    }
 
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
 
-    // Always return 200 to avoid leaking whether an email is registered
+    // Return 200 even if not found to avoid leaking account existence
     if (!user) {
       return NextResponse.json(
         { message: "If that email exists, a verification link has been sent." },
@@ -44,7 +75,10 @@ export async function POST(req: NextRequest) {
     await sendVerificationEmail(user.email, verificationToken.token);
 
     return NextResponse.json(
-      { message: "Verification email sent! Please check your inbox." },
+      {
+        message: "Verification email sent! Please check your inbox.",
+        remaining,
+      },
       { status: 200 }
     );
   } catch (error) {

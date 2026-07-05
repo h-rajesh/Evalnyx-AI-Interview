@@ -1,18 +1,17 @@
 import crypto from "crypto";
-
 import prisma from "@/lib/prisma";
 import { VerificationTokenType } from "@/app/generated/prisma/enums";
 
-const EMAIL_VERIFICATION_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
-const PASSWORD_RESET_EXPIRY = 60 * 60 * 1000; // 1 hour
+const EMAIL_VERIFICATION_EXPIRY = 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_EXPIRY = 60 * 60 * 1000;
 
 export async function generateVerificationToken(
   userId: string,
   type: VerificationTokenType
 ) {
-  // Remove existing tokens of the same type
+  // Remove expired tokens only
   await prisma.verificationToken.deleteMany({
-     where: {
+    where: {
       expiresAt: {
         lt: new Date(),
       },
@@ -28,7 +27,7 @@ export async function generateVerificationToken(
         : PASSWORD_RESET_EXPIRY)
   );
 
-  const verificationToken = await prisma.verificationToken.create({
+  return prisma.verificationToken.create({
     data: {
       token,
       type,
@@ -36,15 +35,12 @@ export async function generateVerificationToken(
       expiresAt,
     },
   });
-
-  return verificationToken;
 }
 
 export async function validateToken(
   token: string,
   type: VerificationTokenType
 ) {
-  // Lazy cleanup
   await prisma.verificationToken.deleteMany({
     where: {
       expiresAt: {
