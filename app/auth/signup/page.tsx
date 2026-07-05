@@ -60,9 +60,9 @@ export default function RegisterPage() {
       return;
     }
 
-    toast.success("Account created successfully!");
+    toast.success("Account created! Check your email to verify.");
 
-    router.push("/auth/signin");
+    router.push(`/auth/verify-email?email=${encodeURIComponent(values.email)}`);
   } catch (error) {
     toast.error("An unexpected error occurred");
   }

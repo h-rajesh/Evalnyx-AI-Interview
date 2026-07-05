@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, getSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { Mail, Lock } from "lucide-react";
+import { useEffect, Suspense } from "react";
 
 import { AuthShell } from "@/components/features/AuthShell";
 import { Button } from "@/components/ui/button";
@@ -22,8 +23,16 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const error = searchParams.get("error");
+    if (error === "missing-token") toast.error("Verification link is missing.");
+    else if (error === "invalid-token") toast.error("This link has expired or is invalid. Please sign up again.");
+    else if (error === "server-error") toast.error("Something went wrong. Please try again.");
+  }, [searchParams]);
 
   const {
     register,
@@ -137,5 +146,13 @@ export default function LoginPage() {
         </Button>
       </form>
     </AuthShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageContent />
+    </Suspense>
   );
 }

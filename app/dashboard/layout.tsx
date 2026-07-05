@@ -66,10 +66,22 @@ function SidebarNav({
   const pathname = usePathname();
   const { data: session } = useSession();
   const sessionUser = session?.user;
-  const { user: storeUser } = useUserStore();
+  const { user: storeUser, updateUser } = useUserStore();
 
-  const userDisplayName = storeUser.name || sessionUser?.name || "Alex Morgan";
-  const userEmail = storeUser.email || sessionUser?.email || "alex.morgan@example.com";
+  // Sync real session data into the store whenever session loads
+  useEffect(() => {
+    if (sessionUser?.name || sessionUser?.email) {
+      updateUser({
+        name: sessionUser.name ?? storeUser.name,
+        email: sessionUser.email ?? storeUser.email,
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionUser?.name, sessionUser?.email]);
+
+  // Session is the primary source; store fills in profile extras (title, location, etc.)
+  const userDisplayName = sessionUser?.name || storeUser.name || "";
+  const userEmail = sessionUser?.email || storeUser.email || "";
 
   const initials = userDisplayName
     ? userDisplayName
@@ -78,7 +90,7 @@ function SidebarNav({
         .join("")
         .toUpperCase()
         .slice(0, 2)
-    : "AM";
+    : "??";
 
   const isActive = (href: string, exact?: boolean) =>
     exact

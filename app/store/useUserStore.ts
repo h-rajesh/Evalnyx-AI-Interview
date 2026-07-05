@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { currentUser as defaultUser } from "@/lib/mock-data";
 
 export interface UserDetails {
   name: string;
@@ -19,15 +18,26 @@ interface UserState {
   resetUser: () => void;
 }
 
+const emptyUser: UserDetails = {
+  name: "",
+  email: "",
+  title: "",
+  avatar: "",
+  location: "",
+  joined: "",
+  skills: [],
+  resumeName: "",
+};
+
 export const useUserStore = create<UserState>()(
   persist(
     (set) => ({
-      user: { ...defaultUser },
+      user: { ...emptyUser },
       updateUser: (patch) =>
         set((state) => ({
           user: { ...state.user, ...patch },
         })),
-      resetUser: () => set({ user: { ...defaultUser } }),
+      resetUser: () => set({ user: { ...emptyUser } }),
     }),
     {
       name: "evalynx-user-details",
