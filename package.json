@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@google/genai": "^2.10.0",
     "@hookform/resolvers": "^5.4.0",
     "@next-auth/prisma-adapter": "^1.0.7",
     "@upstash/ratelimit": "^2.0.8",
@@ -23,10 +24,12 @@
     "next": "16.2.9",
     "next-auth": "^4.24.14",
     "nodemailer": "^7.0.13",
+    "pdf-parse": "^1.1.1",
     "prisma": "^7.8.0",
     "radix-ui": "^1.6.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-dropzone": "^15.0.0",
     "react-hook-form": "^7.80.0",
     "recharts": "^3.9.1",
     "resend": "^6.17.1",
@@ -42,6 +45,7 @@
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.1",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/streamifier": "^0.1.2",

@@ -17,6 +17,7 @@ enum VerificationTokenType {
   PASSWORD_RESET
 }
 
+
 model User {
   id                 String    @id @default(cuid())
   name               String?
@@ -42,6 +43,7 @@ model User {
   sessions           Session[]
   authenticators     Authenticator[]
   verificationTokens VerificationToken[]
+  resumes Resume[]
 
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -108,3 +110,51 @@ model Authenticator {
 
   @@id([userId, credentialID])
 }
+
+model Resume{
+  id String @id @default(cuid())
+
+  userId String
+  user User @relation(fields: [userId],references: [id],onDelete: Cascade)
+
+  fileName String
+  fileUrl String
+  publicId String
+
+  fileSize Int 
+  mimeType String
+
+  parsed Boolean @default(false)
+
+  parsedResume ParsedResume?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model ParsedResume {
+  id        String   @id @default(cuid())
+
+  resumeId  String   @unique
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  fullName  String?
+  email     String?
+  phone     String?
+  summary   String?
+
+  skills     Json?
+  education  Json?
+  experience Json?
+  projects   Json?
+  certifications Json?
+
+  rawText    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+

@@ -5,9 +5,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 
 
-export async function GET(){
+export async function GET(req: NextRequest){
     try {
-        const user = await requireUser();
+        const user = await requireUser(req);
 
         const profile = await userService.getProfile(user.id);
 
@@ -29,7 +29,7 @@ export async function GET(){
 
 export async function PATCH(req:NextRequest) {
     try {
-        const user = await requireUser();
+        const user = await requireUser(req);
 
         const body = await req.json();
 

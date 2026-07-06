@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/auth-user";
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(req);
 
     const formData = await req.formData();
 

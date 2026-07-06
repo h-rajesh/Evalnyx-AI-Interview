@@ -70,6 +70,6 @@ export function SocialAuthButtons({ action = "Continue" }: { action?: string }) 
           </span>
         </div>
       </div>
-    </div>
+    </div >
   );
 }
