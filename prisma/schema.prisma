@@ -17,6 +17,21 @@ enum VerificationTokenType {
   PASSWORD_RESET
 }
 
+enum InterviewStatus {
+  DRAFT
+  SCHEDULED
+  READY
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum interviewDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
 
 model User {
   id                 String    @id @default(cuid())
@@ -44,6 +59,7 @@ model User {
   authenticators     Authenticator[]
   verificationTokens VerificationToken[]
   resumes Resume[]
+  interviews Interview[]
 
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -158,3 +174,29 @@ model ParsedResume {
 }
 
 
+model Interview {
+  id String @id @default(cuid())
+
+  userId String
+  user User @relation(fields: [userId],references: [id],onDelete: Cascade)
+
+  title String
+  jobRole String
+
+  company String?
+
+  description String?
+
+  difficulty interviewDifficulty @default(MEDIUM)
+
+  duration Int @default(30)
+
+  status InterviewStatus @default(DRAFT)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  
+}
