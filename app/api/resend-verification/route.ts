@@ -1,75 +1,47 @@
-import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 
-import prisma from "@/lib/prisma";
 import { authOptions } from "@/lib/authOptions";
-import { generateVerificationToken } from "@/lib/token";
-import { sendVerificationEmail } from "@/lib/email";
+import { success, failure } from "@/lib/api/response";
 import { resendLimiter } from "@/lib/ratelimit";
-import { VerificationTokenType } from "@/app/generated/prisma/enums";
+import authService from "@/services/auth.service";
 
 export async function POST() {
-  const session = await getServerSession(authOptions);
+  try {
+    const session = await getServerSession(authOptions);
 
-  if (!session?.user?.id) {
-    return NextResponse.json(
-      { message: "Unauthorized" },
-      { status: 401 }
+    if (!session?.user?.id) {
+      return failure("Unauthorized", 401);
+    }
+
+    // Rate limit keyed on the user's DB ID — cannot be spoofed
+    const { success: allowed, remaining, reset } = await resendLimiter.limit(
+      session.user.id
     );
+
+    if (!allowed) {
+      const retryAfterSec = Math.ceil((reset - Date.now()) / 1000);
+      return new Response(
+        JSON.stringify({ success: false, message: "Too many requests. Please try again later.", retryAfter: retryAfterSec }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(retryAfterSec),
+            "X-RateLimit-Remaining": String(remaining),
+          },
+        }
+      );
+    }
+
+    const outcome = await authService.resendVerificationById(session.user.id);
+
+    if (!outcome.ok) {
+      return failure(outcome.error, outcome.status);
+    }
+
+    return success("Verification email sent successfully.", { remaining });
+  } catch (error) {
+    console.error("Resend Verification Error:", error);
+    return failure("Internal Server Error.", 500);
   }
-
-  // Rate limit keyed on the user's DB ID — accurate and cannot be spoofed
-  const { success, remaining, reset } = await resendLimiter.limit(
-    session.user.id
-  );
-
-  if (!success) {
-    const retryAfterSec = Math.ceil((reset - Date.now()) / 1000);
-    return NextResponse.json(
-      {
-        message: "Too many requests. Please try again later.",
-        retryAfter: retryAfterSec,
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(retryAfterSec),
-          "X-RateLimit-Remaining": String(remaining),
-        },
-      }
-    );
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-  });
-
-  if (!user) {
-    return NextResponse.json(
-      { message: "User not found." },
-      { status: 404 }
-    );
-  }
-
-  if (user.emailVerified) {
-    return NextResponse.json(
-      { message: "Email already verified." },
-      { status: 400 }
-    );
-  }
-
-  const token = await generateVerificationToken(
-    user.id,
-    VerificationTokenType.EMAIL_VERIFICATION
-  );
-
-  await sendVerificationEmail(user.email, token.token);
-
-  return NextResponse.json(
-    {
-      message: "Verification email sent successfully.",
-      remaining,
-    },
-    { status: 200 }
-  );
 }

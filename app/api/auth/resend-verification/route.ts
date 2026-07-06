@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 
-import prisma from "@/lib/prisma";
-import { generateVerificationToken } from "@/lib/token";
-import { sendVerificationEmail } from "@/lib/email";
+import { success, failure } from "@/lib/api/response";
 import { resendLimiter } from "@/lib/ratelimit";
-import { VerificationTokenType } from "@/app/generated/prisma/enums";
+import authService from "@/services/auth.service";
 
 const schema = z.object({
   email: z.string().email(),
 });
+
+const SAFE_MESSAGE = "If that email exists, a verification link has been sent.";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,30 +17,24 @@ export async function POST(req: NextRequest) {
     const result = schema.safeParse(body);
 
     if (!result.success) {
-      return NextResponse.json(
-        { message: "A valid email address is required." },
-        { status: 422 }
-      );
+      return failure("A valid email address is required.", 422);
     }
 
     const normalizedEmail = result.data.email.toLowerCase().trim();
 
-
     // Rate limit keyed on the normalised email address
-    const { success, remaining, reset } = await resendLimiter.limit(
+    const { success: allowed, remaining, reset } = await resendLimiter.limit(
       normalizedEmail
     );
 
-    if (!success) {
+    if (!allowed) {
       const retryAfterSec = Math.ceil((reset - Date.now()) / 1000);
-      return NextResponse.json(
-        {
-          message: "Too many requests. Please try again later.",
-          retryAfter: retryAfterSec,
-        },
+      return new Response(
+        JSON.stringify({ success: false, message: "Too many requests. Please try again later.", retryAfter: retryAfterSec }),
         {
           status: 429,
           headers: {
+            "Content-Type": "application/json",
             "Retry-After": String(retryAfterSec),
             "X-RateLimit-Remaining": String(remaining),
           },
@@ -48,45 +42,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
-    });
+    const outcome = await authService.resendVerificationByEmail(normalizedEmail);
 
-    // Return 200 even if not found to avoid leaking account existence
-    if (!user) {
-      return NextResponse.json(
-        { message: "If that email exists, a verification link has been sent." },
-        { status: 200 }
-      );
+    if (!outcome.ok) {
+      return failure(outcome.error, outcome.status);
     }
 
-    if (user.emailVerified) {
-      return NextResponse.json(
-        { message: "This email is already verified. Please sign in." },
-        { status: 400 }
-      );
-    }
-
-    const verificationToken = await generateVerificationToken(
-      user.id,
-      VerificationTokenType.EMAIL_VERIFICATION
-    );
-
-    await sendVerificationEmail(user.email, verificationToken.token);
-
-    return NextResponse.json(
-      {
-        message: "Verification email sent! Please check your inbox.",
-        remaining,
-      },
-      { status: 200 }
-    );
+    return success(SAFE_MESSAGE);
   } catch (error) {
     console.error("Resend Verification Error:", error);
-
-    return NextResponse.json(
-      { message: "Internal Server Error." },
-      { status: 500 }
-    );
+    return failure("Internal Server Error.", 500);
   }
 }

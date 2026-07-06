@@ -1,49 +1,32 @@
-import { VerificationTokenType } from "@/app/generated/prisma/enums";
-import prisma from "@/lib/prisma";
-import { deleteToken, validateToken } from "@/lib/token";
 import { NextRequest, NextResponse } from "next/server";
 
+import authService from "@/services/auth.service";
+import { ROUTES } from "@/constants/routes";
 
+export async function GET(req: NextRequest) {
+  try {
+    const token = req.nextUrl.searchParams.get("token");
 
-export async function GET(req : NextRequest) {
-    try {
-        const token = req.nextUrl.searchParams.get("token");
-
-        if(!token){
-            return NextResponse.redirect(
-                new URL("/auth/signin?error=missing-token", req.url)
-            )
-        }
-
-        const verificationToken = await validateToken(
-            token,
-            VerificationTokenType.EMAIL_VERIFICATION
-        );
-        if(!verificationToken){
-            return NextResponse.redirect(
-                new URL("/auth/signin?error=invalid-token", req.url)
-            )
-        }
-
-        await prisma.user.update({
-            where:{
-                id : verificationToken.userId,
-            },
-            data:{
-                emailVerified : new Date()
-            }
-        })
-
-        await deleteToken(token);
-
-        return NextResponse.redirect(
-            new URL("/dashboard", req.url)
-        );
-    } catch (error) {
-        console.error("Verify Email Error:",error);
-
-        return NextResponse.redirect(
-            new URL("/auth/signin?error=server-error", req.url)
-        )
+    if (!token) {
+      return NextResponse.redirect(
+        new URL(`${ROUTES.AUTH.SIGN_IN}?error=missing-token`, req.url)
+      );
     }
+
+    const outcome = await authService.verifyEmail(token);
+
+    if (!outcome.ok) {
+      return NextResponse.redirect(
+        new URL(`${ROUTES.AUTH.SIGN_IN}?error=${outcome.error}`, req.url)
+      );
+    }
+
+    return NextResponse.redirect(new URL(ROUTES.DASHBOARD, req.url));
+  } catch (error) {
+    console.error("Verify Email Error:", error);
+
+    return NextResponse.redirect(
+      new URL(`${ROUTES.AUTH.SIGN_IN}?error=server-error`, req.url)
+    );
+  }
 }

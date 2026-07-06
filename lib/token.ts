@@ -1,6 +1,6 @@
 import crypto from "crypto";
-import prisma from "@/lib/prisma";
 import { VerificationTokenType } from "@/app/generated/prisma/enums";
+import verificationTokenRepository from "@/repositories/verification-token.repository";
 
 const EMAIL_VERIFICATION_EXPIRY = 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_EXPIRY = 60 * 60 * 1000;
@@ -9,14 +9,7 @@ export async function generateVerificationToken(
   userId: string,
   type: VerificationTokenType
 ) {
-  // Remove expired tokens only
-  await prisma.verificationToken.deleteMany({
-    where: {
-      expiresAt: {
-        lt: new Date(),
-      },
-    },
-  });
+  await verificationTokenRepository.deleteExpired();
 
   const token = crypto.randomBytes(32).toString("hex");
 
@@ -27,13 +20,11 @@ export async function generateVerificationToken(
         : PASSWORD_RESET_EXPIRY)
   );
 
-  return prisma.verificationToken.create({
-    data: {
-      token,
-      type,
-      userId,
-      expiresAt,
-    },
+  return verificationTokenRepository.create({
+    token,
+    userId,
+    type,
+    expiresAt,
   });
 }
 
@@ -41,32 +32,11 @@ export async function validateToken(
   token: string,
   type: VerificationTokenType
 ) {
-  await prisma.verificationToken.deleteMany({
-    where: {
-      expiresAt: {
-        lt: new Date(),
-      },
-    },
-  });
+  await verificationTokenRepository.deleteExpired();
 
-  return prisma.verificationToken.findFirst({
-    where: {
-      token,
-      type,
-      expiresAt: {
-        gt: new Date(),
-      },
-    },
-    include: {
-      user: true,
-    },
-  });
+  return verificationTokenRepository.find(token, type);
 }
 
 export async function deleteToken(token: string) {
-  await prisma.verificationToken.deleteMany({
-    where: {
-      token,
-    },
-  });
+  return verificationTokenRepository.delete(token);
 }

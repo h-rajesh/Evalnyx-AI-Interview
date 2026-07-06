@@ -18,7 +18,7 @@ const schema = z
   .object({
     name: z.string().min(2, "Enter your name"),
     email: z.string().email("Enter a valid email"),
-    password: z.string().min(6, "At least 6 characters"),
+    password: z.string().min(8, "At least 8 characters"),
     confirm: z.string(),
   })
   .refine((data) => data.password === data.confirm, {
