@@ -119,6 +119,25 @@ async deleteByIdAndUser(
     },
   });
 }
+async startInterview(id: string) {
+  return InterviewRepository.update(id, {
+    status: InterviewStatus.IN_PROGRESS,
+  });
+}
+async updateCompletedTopics(
+  id: string,
+  topics: string[]
+) {
+  return InterviewRepository.updateCompletedTopics(
+    id,
+    topics
+  );
+}
+
+async incrementQuestion(id: string) {
+  return InterviewRepository.incrementQuestion(id);
+}
+
 }
 
 export default new InterviewService();

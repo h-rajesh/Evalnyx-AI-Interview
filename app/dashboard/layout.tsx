@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/app/store/useUserStore";
+import { useProfile } from "@/hooks/useProfile";
+import { useResume } from "@/hooks/useResume";
 
 const nav = [
   {
@@ -188,6 +190,12 @@ export default function DashboardLayout({
     return null;
   }
 
+  const { profile, loading: profileLoading } = useProfile();
+  const { resume, loading: resumeLoading } = useResume();
+
+  const isProfileIncomplete = profile && !profile.profileCompleted;
+  const isResumeMissing = !resumeLoading && !resume;
+
   return (
     <div className="min-h-screen bg-background">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-sidebar-border bg-sidebar lg:block">
@@ -235,6 +243,34 @@ export default function DashboardLayout({
         </header>
 
         <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+          {!(profileLoading || resumeLoading) && (isProfileIncomplete || isResumeMissing) && (
+            <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-300 backdrop-blur-sm shadow-soft">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h4 className="font-semibold text-sm sm:text-base flex items-center gap-2">
+                    ⚠️ Complete Your Setup
+                  </h4>
+                  <p className="text-xs sm:text-sm opacity-90 mt-1">
+                    {isProfileIncomplete && "Your profile details are incomplete. "}
+                    {isResumeMissing && "You haven't uploaded a resume yet. "}
+                    Please complete these steps to enable AI mock interviews.
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  {isProfileIncomplete && (
+                    <Button asChild size="sm" className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl">
+                      <Link href="/dashboard/profile">Complete Profile</Link>
+                    </Button>
+                  )}
+                  {isResumeMissing && (
+                    <Button asChild size="sm" className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl">
+                      <Link href="/dashboard/profile">Upload Resume</Link>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           {children}
         </main>
       </div>

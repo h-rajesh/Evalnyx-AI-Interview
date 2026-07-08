@@ -19,32 +19,45 @@ export interface Profile {
   yearsExperience: number | null;
   avatarUrl: string | null;
   profileCompleted: boolean;
+  createdAt?: string;
 }
 
 export function useProfile() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const response = await api<{
-          success: boolean;
-          data: Profile;
-        }>("/api/user/profile");
+  async function load() {
+    try {
+      const response = await api<{
+        success: boolean;
+        data: Profile;
+      }>("/api/user/profile");
 
-        setProfile(response.data);
-      } finally {
-        setLoading(false);
-      }
+      setProfile(response.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
+  }
 
+  useEffect(() => {
     load();
+
+    const handleUpdate = () => {
+      load();
+    };
+
+    window.addEventListener("profile-updated", handleUpdate);
+    return () => {
+      window.removeEventListener("profile-updated", handleUpdate);
+    };
   }, []);
 
   return {
     profile,
     loading,
     setProfile,
+    refresh: load,
   };
 }

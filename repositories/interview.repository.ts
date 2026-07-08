@@ -40,6 +40,39 @@ class InterviewRepository {
       where: { id },
     });
   }
+
+  async updateCompletedTopics(
+  id: string,
+  topics: string[]
+) {
+  return prisma.interview.update({
+    where: {
+      id,
+    },
+    data: {
+      completedTopics: topics,
+    },
+  });
+}
+
+async incrementQuestion(id: string) {
+  const interview = await prisma.interview.findUnique({
+    where: { id },
+  });
+
+  if (!interview) {
+    throw new Error("Interview not found");
+  }
+
+  return prisma.interview.update({
+    where: {
+      id,
+    },
+    data: {
+      currentQuestion: interview.currentQuestion + 1,
+    },
+  });
+}
 }
 
 export default new InterviewRepository();

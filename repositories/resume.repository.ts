@@ -17,6 +17,9 @@ class ResumeRepository {
   async findByUserId(userId: string) {
     return prisma.resume.findFirst({
       where: { userId },
+      include: {
+        parsedResume: true,
+      },
       orderBy: {
         createdAt: "desc",
       },

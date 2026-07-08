@@ -31,7 +31,31 @@ enum interviewDifficulty {
   MEDIUM
   HARD
 }
+enum InterviewType {
+  HR
+  TECHNICAL
+  SYSTEM_DESIGN
+  BEHAVIORAL
+  MIXED
+}
 
+enum InterviewMode {
+  TEXT
+  VOICE
+  VIDEO
+}
+
+enum SessionStatus {
+  CREATED
+  ACTIVE
+  ENDED
+}
+
+enum MessageRole {
+  SYSTEM
+  ASSISTANT
+  USER
+}
 
 model User {
   id                 String    @id @default(cuid())
@@ -187,7 +211,25 @@ model Interview {
 
   description String?
 
+  sessions InterviewSession[]
+  messages InterviewMessage[]
+
   difficulty interviewDifficulty @default(MEDIUM)
+  interviewType InterviewType @default(MIXED)
+
+  interviewMode InterviewMode @default(VIDEO)
+
+  totalQuestions Int @default(10)
+
+  currentQuestion Int @default(0)
+
+  techStack Json?
+
+  completedTopics Json?
+
+  score Float?
+
+  feedback Json?
 
   duration Int @default(30)
 
@@ -199,4 +241,36 @@ model Interview {
 
   @@index([userId])
   
+}
+
+model InterviewSession {
+  id String @id @default(cuid())
+
+  interviewId String
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  roomName String @unique
+
+  participantIdentity String
+
+  startedAt DateTime?
+
+  endedAt DateTime?
+
+  status SessionStatus @default(CREATED)
+
+  createdAt DateTime @default(now())
+}
+
+model InterviewMessage {
+  id          String   @id @default(cuid())
+
+  interviewId String
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  role        MessageRole
+
+  content     String   @db.Text
+
+  createdAt   DateTime @default(now())
 }

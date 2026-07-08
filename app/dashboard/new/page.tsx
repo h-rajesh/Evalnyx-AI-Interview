@@ -94,6 +94,7 @@ export default function NewInterviewPage() {
 
   const [step, setStep] = useState(0);
   const [fileName, setFileName] = useState(config.resumeName);
+  const [generating, setGenerating] = useState(false);
 
   const progress = ((step + 1) / steps.length) * 100;
 
@@ -103,16 +104,51 @@ export default function NewInterviewPage() {
   const prev = () =>
     setStep((s) => Math.max(s - 1, 0));
 
-  const generate = () => {
-    toast.success("Interview generated", {
-      description: "Your AI interviewer is ready.",
-    });
+  const generate = async () => {
+    setGenerating(true);
+    try {
+      // Map UI strings to the API schema shape
+      const difficultyMap: Record<string, "EASY" | "MEDIUM" | "HARD"> = {
+        Easy: "EASY",
+        Medium: "MEDIUM",
+        Hard: "HARD",
+      };
+      const durationMinutes = parseInt(config.duration, 10) || 30;
 
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("completed_interview_new");
+      const res = await fetch("/api/interviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `${config.role} Interview`,
+          jobRole: config.role,
+          description: config.jobDescription || null,
+          difficulty: difficultyMap[config.difficulty] ?? "MEDIUM",
+          duration: durationMinutes,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!json.success) {
+        toast.error("Failed to create interview", {
+          description: json.message ?? "Please try again.",
+        });
+        return;
+      }
+
+      toast.success("Interview created!", {
+        description: "Your AI interviewer is ready.",
+      });
+
+      router.push(`/interview/${json.data.id}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Network error", {
+        description: "Could not reach the server.",
+      });
+    } finally {
+      setGenerating(false);
     }
-
-    router.push("/interview/new");
   };
 
   return (
@@ -343,10 +379,11 @@ export default function NewInterviewPage() {
             ) : (
               <Button
                 onClick={generate}
+                disabled={generating}
                 className="rounded-xl gradient-primary text-primary-foreground"
               >
                 <Sparkles className="mr-1.5 h-4 w-4" />
-                Generate Interview
+                {generating ? "Creating..." : "Generate Interview"}
               </Button>
             )}
           </div>

@@ -9,6 +9,7 @@ export interface Resume {
   fileSize: number;
   parsed: boolean;
   createdAt: string;
+  parsedResume?: any;
 }
 
 export function useResume() {
@@ -22,7 +23,12 @@ export function useResume() {
 
       if (json.success) {
         setResume(json.data);
+      } else {
+        setResume(null);
       }
+    } catch (err) {
+      console.error(err);
+      setResume(null);
     } finally {
       setLoading(false);
     }
@@ -30,6 +36,15 @@ export function useResume() {
 
   useEffect(() => {
     fetchResume();
+
+    const handleUpdate = () => {
+      fetchResume();
+    };
+
+    window.addEventListener("resume-updated", handleUpdate);
+    return () => {
+      window.removeEventListener("resume-updated", handleUpdate);
+    };
   }, []);
 
   return {
