@@ -16,10 +16,11 @@ export async function GET(req: NextRequest){
             data : profile
         })
     } catch (error) {
+        console.error("[GET /api/user/profile] Error:", error);
         return NextResponse.json(
             {
                 success : false,
-                message : "Unauthorized"
+                message : error instanceof Error ? error.message : "Unauthorized"
             },{
                 status : 401
             }
@@ -54,10 +55,11 @@ export async function PATCH(req:NextRequest) {
             data : profile
         })
     } catch (error) {
+        console.error("[PATCH /api/user/profile] Error:", error);
         return NextResponse.json(
             {
                 success : false,
-                message : "Unauthorized",
+                message : error instanceof Error ? error.message : "Unauthorized",
             },
             {
                 status : 401

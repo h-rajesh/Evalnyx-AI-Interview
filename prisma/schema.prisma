@@ -213,6 +213,13 @@ model Interview {
 
   sessions InterviewSession[]
   messages InterviewMessage[]
+  evaluations InterviewEvaluation[]
+  behaviorSnapshots BehaviorSnapshot[]
+  integrityEvents IntegrityEvent[]
+  timelineEvents InterviewTimelineEvent[]
+
+ report InterviewReport?
+  
 
   difficulty interviewDifficulty @default(MEDIUM)
   interviewType InterviewType @default(MIXED)
@@ -273,4 +280,141 @@ model InterviewMessage {
   content     String   @db.Text
 
   createdAt   DateTime @default(now())
+}
+
+model InterviewEvaluation {
+
+  id String @id @default(cuid())
+
+  interviewId String
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  questionNumber Int
+
+  question String @db.Text
+
+  answer String @db.Text
+
+  technicalScore Float
+
+  communicationScore Float
+
+  confidenceScore Float
+
+  correctnessScore Float
+
+  strengths Json
+
+  weaknesses Json
+
+  feedback String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([interviewId])
+}
+
+model BehaviorSnapshot {
+  id String @id @default(cuid())
+
+  interviewId String
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  second Int
+
+  attention Float
+
+  confidence Float
+
+  eyeContact Float
+
+  headDirection String
+
+  emotion Json?
+
+  blinkRate Float
+
+  speaking Boolean
+
+  voiceVolume Float
+
+  createdAt DateTime @default(now())
+
+  @@index([interviewId])
+}
+
+model IntegrityEvent {
+  id String @id @default(cuid())
+
+  interviewId String
+
+  interview Interview @relation(fields:[interviewId], references:[id], onDelete:Cascade)
+
+  type String
+
+  severity Int
+
+  second Int
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([interviewId])
+}
+
+model InterviewReport {
+  id String @id @default(cuid())
+
+  interviewId String @unique
+
+  interview Interview @relation(fields:[interviewId], references:[id], onDelete:Cascade)
+
+  overallScore Float
+
+  technicalScore Float
+
+  communicationScore Float
+
+  behaviorScore Float
+
+  confidenceScore Float
+
+  integrityScore Float
+
+  voiceScore Float
+
+  recommendation String
+
+  summary String?
+
+  strengths Json?
+
+  weaknesses Json?
+
+  improvementPlan Json?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+}
+
+model InterviewTimelineEvent {
+  id String @id @default(cuid())
+
+  interviewId String
+
+  interview Interview @relation(fields:[interviewId], references:[id], onDelete:Cascade)
+
+  timestamp Int
+
+  type String
+
+  data Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([interviewId])
 }

@@ -3,6 +3,7 @@ import ResumeRepository from "@/repositories/resume.repository";
 import UserRepository from "@/repositories/user.repository";
 import {
   InterviewStatus,
+  interviewDifficulty,
 } from "@/app/generated/prisma/enums";
 import prisma from "@/lib/prisma";
 import { InterviewUpdateInput } from "@/app/generated/prisma/models";
@@ -134,10 +135,15 @@ async updateCompletedTopics(
   );
 }
 
-async incrementQuestion(id: string) {
-  return InterviewRepository.incrementQuestion(id);
-}
+  async incrementQuestion(id: string) {
+    return InterviewRepository.incrementQuestion(id);
+  }
 
+  async updateDifficulty(id: string, difficulty: interviewDifficulty) {
+    return InterviewRepository.update(id, {
+      difficulty,
+    });
+  }
 }
 
 export default new InterviewService();

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import speechRecognitionService from "@/services/speech-recognition.service";
 import {
   Bot,
   Mic,
@@ -22,6 +22,7 @@ import {
   Send,
   Pencil,
   Check,
+  AlertTriangle,
 } from "lucide-react";
 
 import { Logo } from "@/components/common/Logo";
@@ -38,17 +39,24 @@ import {
 } from "@/lib/mock-data";
 import CameraPreview from "@/components/interview/CameraPreview";
 import LiveInterview from "@/components/interview/LiveInterview";
+import snapshotService from "@/services/snapshot.service";
+import { useInterviewStore } from "@/stores/interview-store";
+import interviewOrchestrator from "@/services/interview-orchestrator.service";
+import { InterviewState } from "@/types/interview-state";
+import aiSpeechService from "@/services/ai-speech.service";
+import interviewSession from "@/services/interview-session.service";
 
-function useTimer() {
+function useTimer(active: boolean) {
   const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
+    if (!active) return;
     const timer = setInterval(() => {
       setSeconds((s) => s + 1);
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [active]);
 
 
   const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
@@ -63,6 +71,28 @@ export default function InterviewRoom() {
 
   const id = params.id as string;
 
+  const state = useInterviewStore((s) => s.state);
+  const transcript = useInterviewStore((s) => s.transcript);
+  const question = useInterviewStore((s) => s.question);
+  const questionNumber = useInterviewStore((s) => s.questionNumber);
+  const totalQuestions = useInterviewStore((s) => s.totalQuestions);
+
+  useEffect(() => {
+    aiSpeechService.init();
+    return () => {
+      aiSpeechService.stop();
+      speechRecognitionService.stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    return interviewOrchestrator.subscribe(
+      (state) => {
+        console.log(state);
+      }
+    );
+  }, []);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const isCompleted = localStorage.getItem(`completed_interview_${id}`);
@@ -72,29 +102,21 @@ export default function InterviewRoom() {
     }
   }, [id, router]);
 
-  const timer = useTimer();
-  const [aiQuestion, setAiQuestion] = useState("");
-  const [conversation, setConversation] = useState<
-    {
-      role: "assistant" | "user";
-      text: string;
-    }[]
-  >([]);
+  const [isStarted, setIsStarted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(true);
+  const [startError, setStartError] = useState<string | null>(null);
+  const timer = useTimer(isStarted);
 
-  const [qIndex, setQIndex] = useState(0);
   const [micOn, setMicOn] = useState(true);
-  const [speechSegments, setSpeechSegments] = useState<string[]>([]);
-  const liveSpeech = useSpeechRecognition(micOn, (segment) => {
-    setSpeechSegments((prev) => [...prev, segment]);
-  });
   const [cameraOn, setCameraOn] = useState(true);
   const [screenShareOn, setScreenShareOn] = useState(false);
-  const [answer, setAnswer] = useState("");
-  const [submitted, setSubmitted] = useState<Record<number, string>>({});
   const [liveKitData, setLiveKitData] = useState<{ token: string; url: string } | null>(null);
+  const startRequestedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !isStarted) return;
+    if (startRequestedRef.current === id) return;
+    startRequestedRef.current = id;
 
     async function startInterview() {
       try {
@@ -106,61 +128,40 @@ export default function InterviewRoom() {
 
         console.log("Status:", res.status);
 
+        if (!res.ok) {
+          const text = await res.text();
+          let msg = "Failed to start interview.";
+          try {
+            const parsed = JSON.parse(text);
+            msg = parsed.message || msg;
+          } catch {
+            msg = `Server returned status ${res.status}`;
+          }
+          setStartError(msg);
+          return;
+        }
+
         const json = await res.json();
 
         console.log("Response:", json);
 
         if (json.success) {
           setLiveKitData(json.data);
-
-          const res = await fetch("/api/ai/chat", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              interviewId: id,
-            }),
-          });
-
-          const ai = await res.json();
-
-          if (ai.success) {
-            setAiQuestion(ai.question);
-
-            setConversation([
-              {
-                role: "assistant",
-                text: ai.question,
-              },
-            ]);
-          }
+          await interviewSession.start(id);
         } else {
-          console.error(json.message);
+          setStartError(json.message || "Failed to start interview.");
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
+        setStartError(err.message || "A network error occurred. Please check your connection.");
       }
     }
 
     startInterview();
-  }, [id]);
+  }, [id, isStarted]);
 
   const transcriptRef = useRef<HTMLDivElement>(null);
-  const transcript = [
-    ...speechSegments.map((text) => ({
-      speaker: "You" as const,
-      text,
-    })),
-    ...(liveSpeech
-      ? [
-        {
-          speaker: "You" as const,
-          text: liveSpeech,
-        },
-      ]
-      : []),
-  ];
+
   // Auto-scroll to the bottom of the transcript as new messages arrive
   useEffect(() => {
     if (transcriptRef.current) {
@@ -171,88 +172,259 @@ export default function InterviewRoom() {
     }
   }, [transcript]);
 
-  const question = interviewQuestions[qIndex];
+  const progress = (questionNumber / totalQuestions) * 100;
 
-  const progress =
-    ((qIndex + 1) / interviewQuestions.length) * 100;
+  const questionCategory = interviewQuestions[questionNumber - 1]?.category || "General";
 
-  const submittedAnswer = submitted[qIndex];
 
-const submitAnswer = async () => {
-  if (!answer.trim()) return;
-
-  setSubmitted((s) => ({
-    ...s,
-    [qIndex]: answer.trim(),
-  }));
-
-  const updatedConversation: typeof conversation = [
-    ...conversation,
-    {
-      role: "user",
-      text: answer,
-    },
-  ];
-
-  setConversation(updatedConversation);
-
-  const res = await fetch("/api/ai/chat", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    interviewId: id,
-    answer,
-  }),
-});
-
-  const data = await res.json();
-
-  if (data.success) {
-    setAiQuestion(data.question);
-
-    setConversation([
-      ...updatedConversation,
-      {
-        role: "assistant",
-        text: data.question,
-      },
-    ]);
-
-    setAnswer("");
-  }
-};
-  const editAnswer = () => {
-    setAnswer(submitted[qIndex] ?? "");
-    setSubmitted((s) => {
-      const next = { ...s };
-      delete next[qIndex];
-      return next;
-    });
-  };
-
-  const nextQuestion = () => {
-    setAnswer("");
-    setSpeechSegments([]);
-    if (qIndex < interviewQuestions.length - 1) {
-      setQIndex((i) => i + 1);
-    } else {
-      endInterview();
-    }
-  };
 
   const endInterview = () => {
     if (typeof window !== "undefined") {
       localStorage.setItem(`completed_interview_${id}`, "true");
     }
+    snapshotService.stop();
+    aiSpeechService.stop();
+    speechRecognitionService.stop();
     router.replace(
       `/report/${id === "new" ? "int_001" : id}`
     );
   };
 
+  if (!isStarted) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background overflow-y-auto">
+        <header className="flex h-16 items-center justify-between border-b border-border/60 px-4 sm:px-6 shrink-0">
+          <Logo />
+          <ThemeToggle />
+        </header>
+
+        <main className="flex-1 flex items-center justify-center p-4 md:p-8">
+          <div className="w-full max-w-4xl grid gap-6 md:grid-cols-2">
+            
+            {/* Left Column: Camera Preview and Mic wave */}
+            <Card className="border-border/60 shadow-soft overflow-hidden flex flex-col h-[380px] md:h-[450px]">
+              <div className="relative flex-1 bg-gradient-to-br from-muted to-muted/40 overflow-hidden">
+                {cameraOn ? (
+                  <CameraPreview />
+                ) : (
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2">
+                    <div className="rounded-full bg-destructive/10 p-3 text-destructive">
+                      <VideoOff className="h-6 w-6" />
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground">Camera feed disabled</span>
+                  </div>
+                )}
+                
+                <Badge
+                  variant="outline"
+                  className="absolute left-3 top-3 gap-1.5 rounded-full bg-background/80 text-xs backdrop-blur font-semibold"
+                >
+                  <CircleDot className="h-3 w-3 text-primary animate-pulse" />
+                  Preview
+                </Badge>
+              </div>
+
+              <div className="p-4 border-t border-border/60 flex items-center justify-between bg-muted/20 shrink-0">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="rounded-xl h-10 w-10 border-border/80"
+                    onClick={() => setCameraOn((c) => !c)}
+                    aria-label="Toggle camera preview"
+                  >
+                    {cameraOn ? (
+                      <Video className="h-4 w-4 text-success" />
+                    ) : (
+                      <VideoOff className="h-4 w-4 text-destructive" />
+                    )}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="rounded-xl h-10 w-10 border-border/80"
+                    onClick={() => setMicOn((m) => !m)}
+                    aria-label="Toggle microphone preview"
+                  >
+                    {micOn ? (
+                      <Mic className="h-4 w-4 text-success" />
+                    ) : (
+                      <MicOff className="h-4 w-4 text-destructive" />
+                    )}
+                  </Button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Mic: {micOn ? "Active" : "Muted"}
+                  </span>
+                  {micOn && (
+                    <div className="flex items-end gap-0.5 h-3">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <motion.span
+                          key={i}
+                          className="w-0.5 rounded-full bg-primary/70"
+                          animate={{
+                            height: [2, Math.random() * 8 + 2, 2]
+                          }}
+                          transition={{
+                            repeat: Infinity,
+                            duration: 0.5 + (i % 3) * 0.1,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+
+            {/* Right Column: Information, Guidelines, and Start Button */}
+            <Card className="border-border/60 shadow-soft p-6 flex flex-col justify-between h-[380px] md:h-[450px]">
+              <div className="space-y-4">
+                <div>
+                  <Badge variant="secondary" className="rounded-full font-semibold px-3 py-1 mb-2">
+                    Evaluation Setup
+                  </Badge>
+                  <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                    AI Interview Lobby
+                  </h1>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Please ensure your camera and microphone are properly configured before starting.
+                  </p>
+                </div>
+
+                <div className="space-y-3 rounded-xl bg-muted/40 p-4 border border-border/30">
+                  <h3 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    Interview Guidelines
+                  </h3>
+                  
+                  <ul className="space-y-2 text-[11px] text-muted-foreground">
+                    <li className="flex items-start gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                      <span><strong>Fullscreen Mode Required:</strong> Exiting fullscreen will trigger warnings.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                      <span><strong>Proctoring Monitor:</strong> Browser window focus, switching tabs, or camera presence is tracked.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                      <span><strong>Warning Limit:</strong> 3 fullscreen exit violations will result in automatic termination of the interview.</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="space-y-2 shrink-0">
+                <Button
+                  className="w-full h-12 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 shadow-elevated hover:opacity-95 transition-all text-sm"
+                  onClick={async () => {
+                    try {
+                      if (!document.fullscreenElement) {
+                        await document.documentElement.requestFullscreen();
+                      }
+                      setIsFullscreen(true);
+                    } catch (err) {
+                      console.error("Failed to request fullscreen:", err);
+                    }
+                    setIsStarted(true);
+                    interviewOrchestrator.transition(
+                      InterviewState.GENERATING_QUESTION
+                    );
+                  }}
+                >
+                  Start Interview <ChevronRight className="h-4 w-4" />
+                </Button>
+                <p className="text-center text-[10px] text-muted-foreground">
+                  By starting, you consent to locally process camera & audio for evaluation.
+                </p>
+              </div>
+            </Card>
+
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (startError) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background overflow-y-auto">
+        <header className="flex h-16 items-center justify-between border-b border-border/60 px-4 sm:px-6 shrink-0">
+          <Logo />
+          <ThemeToggle />
+        </header>
+
+        <main className="flex-1 flex items-center justify-center p-4">
+          <div className="w-full max-w-md space-y-6 rounded-2xl border border-border/60 bg-card p-8 shadow-elevated text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+              <AlertTriangle className="h-8 w-8 animate-pulse" />
+            </div>
+            
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold tracking-tight text-foreground">Failed to Start Interview</h2>
+              <p className="text-sm text-muted-foreground leading-normal">
+                {startError}
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <Button
+                variant="outline"
+                className="w-full rounded-xl h-11"
+                onClick={() => {
+                  if (document.fullscreenElement) {
+                    document.exitFullscreen().catch(console.error);
+                  }
+                  router.replace("/dashboard");
+                }}
+              >
+                Back to Dashboard
+              </Button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
+      {!isFullscreen && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-lg px-4 text-center">
+          <div className="max-w-md space-y-6 rounded-2xl border border-border/60 bg-card p-8 shadow-elevated">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+              <AlertTriangle className="h-8 w-8 animate-bounce" />
+            </div>
+            
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold tracking-tight">Fullscreen Required</h2>
+              <p className="text-sm text-muted-foreground">
+                This interview requires you to remain in fullscreen mode. Click below to resume.
+              </p>
+            </div>
+
+            <Button
+              className="w-full rounded-xl gradient-primary text-primary-foreground font-semibold py-3 flex items-center justify-center gap-2 shadow-elevated"
+              onClick={async () => {
+                try {
+                  if (!document.fullscreenElement) {
+                    await document.documentElement.requestFullscreen();
+                  }
+                  setIsFullscreen(true);
+                } catch (err) {
+                  console.error("Failed to re-enter fullscreen:", err);
+                }
+              }}
+            >
+              Resume Fullscreen
+            </Button>
+          </div>
+        </div>
+      )}
       <header className="flex h-16 items-center justify-between border-b border-border/60 px-4 sm:px-6">
         <Logo />
 
@@ -263,6 +435,10 @@ const submitAnswer = async () => {
           >
             <CircleDot className="h-3 w-3 animate-pulse" />
             Recording
+          </Badge>
+
+          <Badge variant="secondary" className="rounded-full">
+            {state}
           </Badge>
 
           <span className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-sm font-semibold tabular-nums">
@@ -277,7 +453,7 @@ const submitAnswer = async () => {
       <div className="border-b border-border/60 px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-6xl items-center gap-4">
           <span className="text-xs font-medium text-muted-foreground">
-            Question {qIndex + 1} of {interviewQuestions.length}
+            Question {questionNumber} of {totalQuestions}
           </span>
 
           <Progress value={progress} className="h-1.5 flex-1" />
@@ -339,11 +515,11 @@ const submitAnswer = async () => {
                 variant="secondary"
                 className="rounded-full px-2 py-0.5 text-[10px]"
               >
-                {question.category}
+                {questionCategory}
               </Badge>
             </div>
             <h2 className="mt-1.5 font-display text-base font-bold leading-snug">
-              {aiQuestion || "Preparing your interview..."}
+              {question || "Preparing your interview..."}
             </h2>
           </Card>
 
@@ -365,115 +541,12 @@ const submitAnswer = async () => {
 
             <div
               ref={transcriptRef}
-              className="flex-1 space-y-3 overflow-y-auto p-4 scrollbar-thin scroll-smooth"
+              className="flex-1 overflow-y-auto p-6 scrollbar-thin scroll-smooth flex items-center justify-center text-center bg-muted/10"
             >
-              {transcript.map((t, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "group flex flex-col gap-1",
-                    t.speaker === "You" && "items-end"
-                  )}
-                >
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    {t.speaker}
-                  </span>
-
-                  <p
-                    className={cn(
-                      "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm",
-                      t.speaker === "You"
-                        ? "gradient-primary text-primary-foreground"
-                        : "bg-muted"
-                    )}
-                  >
-                    {t.text}
-                  </p>
-
-                  {t.speaker === "You" && (
-                    <div
-                      className={cn(
-                        "flex items-center gap-2.5 mt-1 px-1 transition-all duration-200",
-                        submittedAnswer
-                          ? "opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
-                          : "opacity-100"
-                      )}
-                    >
-                      <button
-                        onClick={() => {
-                          setAnswer(t.text);
-                          setTimeout(() => {
-                            const textarea = document.getElementById("answer-textarea");
-                            if (textarea) {
-                              (textarea as HTMLTextAreaElement).focus();
-                            }
-                          }, 50);
-                        }}
-                        className="flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary/80 transition-colors cursor-pointer"
-                      >
-                        <Pencil className="h-3 w-3" />
-                        Edit in input box
-                      </button>
-                      <span className="text-muted-foreground/30 text-[10px]">|</span>
-                      <button
-                        onClick={() => {
-                          setAnswer(t.text);
-                          setSubmitted((s) => ({ ...s, [qIndex]: t.text }));
-                        }}
-                        className="flex items-center gap-1 text-[11px] font-semibold text-success hover:text-success/80 transition-colors cursor-pointer"
-                      >
-                        <Check className="h-3 w-3" />
-                        Confirm & Submit
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+              <p className="text-lg font-medium text-foreground/80 leading-relaxed max-w-md animate-pulse">
+                {transcript || "Listening..."}
+              </p>
             </div>
-          </Card>
-
-          {/* Answer composer — review & edit before submitting */}
-          <Card className="border-border/60 p-3 shadow-soft shrink-0">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold">Your Answer</span>
-                {!submittedAnswer && (
-                  <span className="text-[10px] text-muted-foreground">{answer.trim().length} chars</span>
-                )}
-              </div>
-
-              {!submittedAnswer ? (
-                <Button
-                  size="sm"
-                  className="h-7 rounded-lg gradient-primary px-3 text-[11px] text-primary-foreground"
-                  onClick={submitAnswer}
-                  disabled={!answer.trim()}
-                >
-                  <Send className="mr-1 h-3.5 w-3.5" /> Submit answer
-                </Button>
-              ) : (
-                <div className="flex gap-1.5">
-                  <Button size="sm" variant="outline" className="h-7 rounded-lg px-2 text-[11px]" onClick={editAnswer}>
-                    <Pencil className="mr-1 h-3 w-3" /> Edit
-                  </Button>
-                  <Button size="sm" className="h-7 rounded-lg gradient-primary px-2.5 text-[11px] text-primary-foreground" onClick={nextQuestion}>
-                    Next <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {submittedAnswer ? (
-              <p className="whitespace-pre-wrap rounded-lg bg-muted/40 p-2.5 text-xs leading-normal">{submittedAnswer}</p>
-            ) : (
-              <Textarea
-                id="answer-textarea"
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                placeholder="Review, edit, and refine your answer here before submitting…"
-                className="h-16 min-h-[64px] resize-none rounded-lg p-2 text-xs leading-normal"
-              />
-            )}
           </Card>
         </div>
         {/* Right: camera + mic */}
@@ -489,6 +562,8 @@ const submitAnswer = async () => {
                     micOn={micOn}
                     cameraOn={cameraOn}
                     screenShareOn={screenShareOn}
+                    onViolationLimitReached={endInterview}
+                    onFullscreenChange={setIsFullscreen}
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center">
@@ -629,23 +704,6 @@ const submitAnswer = async () => {
 
           <div className="flex items-center gap-2">
             <Button
-              variant="ghost"
-              className="rounded-xl"
-              onClick={nextQuestion}
-            >
-              <SkipForward className="mr-1.5 h-4 w-4" />
-              Skip
-            </Button>
-
-            <Button
-              className="rounded-xl gradient-primary text-primary-foreground"
-              onClick={nextQuestion}
-            >
-              Next
-              <ChevronRight className="ml-1 h-4 w-4" />
-            </Button>
-
-            <Button
               variant="destructive"
               className="rounded-xl"
               onClick={endInterview}
@@ -656,6 +714,7 @@ const submitAnswer = async () => {
           </div>
         </div>
       </footer>
+
     </div>
   );
 }

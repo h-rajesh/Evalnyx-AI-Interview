@@ -1,6 +1,6 @@
-const { v2: cloudinary } = require("cloudinary");
-const dotenv = require("dotenv");
-dotenv.config();
+const cloudinary = require("cloudinary").v2;
+const streamifier = require("streamifier");
+require("dotenv").config();
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -8,39 +8,45 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-console.log("Cloudinary Config:", {
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY ? "LOADED" : "MISSING",
-  api_secret: process.env.CLOUDINARY_API_SECRET ? "LOADED" : "MISSING",
-});
-
-const fs = require("fs");
-const path = require("path");
-
-async function testUpload() {
+async function run() {
+  console.log("Configured Cloudinary with cloud name:", process.env.CLOUDINARY_CLOUD_NAME);
+  const buffer = Buffer.from("dummy pdf content %PDF-1.4 ...");
+  
+  console.log("Attempting upload as 'raw'...");
   try {
-    // Create a dummy text buffer representing a raw file
-    const buffer = Buffer.from("dummy pdf content");
-    
-    console.log("Uploading dummy raw file to Cloudinary...");
-    const result = await new Promise((resolve, reject) => {
+    const start = Date.now();
+    const resRaw = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        {
-          folder: "evalnyx/test",
-          resource_type: "raw",
-        },
-        (error, result) => {
-          if (error) return reject(error);
-          resolve(result);
+        { folder: "evalnyx/test", resource_type: "raw" },
+        (err, result) => {
+          if (err) reject(err);
+          else resolve(result);
         }
       );
-      stream.end(buffer);
+      streamifier.createReadStream(buffer).pipe(stream);
     });
-    
-    console.log("Upload Success:", result.secure_url);
-  } catch (error) {
-    console.error("Upload Error:", error);
+    console.log("Uploaded as 'raw' in", Date.now() - start, "ms. Result:", resRaw.secure_url);
+  } catch (err) {
+    console.error("Failed to upload as 'raw':", err);
+  }
+
+  console.log("\nAttempting upload as 'image'...");
+  try {
+    const start = Date.now();
+    const resImg = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: "evalnyx/test", resource_type: "image", public_id: "test_pdf.pdf" },
+        (err, result) => {
+          if (err) reject(err);
+          else resolve(result);
+        }
+      );
+      streamifier.createReadStream(buffer).pipe(stream);
+    });
+    console.log("Uploaded as 'image' in", Date.now() - start, "ms. Result:", resImg.secure_url);
+  } catch (err) {
+    console.error("Failed to upload as 'image':", err);
   }
 }
 
-testUpload();
+run();

@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE "BehaviorSnapshot" ALTER COLUMN "attention" SET DEFAULT 0,
+ALTER COLUMN "confidence" SET DEFAULT 0,
+ALTER COLUMN "eyeContact" SET DEFAULT 0,
+ALTER COLUMN "headDirection" SET DEFAULT 'CENTER',
+ALTER COLUMN "emotion" DROP NOT NULL,
+ALTER COLUMN "blinkRate" SET DEFAULT 0,
+ALTER COLUMN "voiceVolume" SET DEFAULT 0;

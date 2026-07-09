@@ -12,6 +12,7 @@ export async function uploadFile(
       {
         folder,
         resource_type: resourceType,
+        timeout: 120000, // 2 minutes timeout to handle slow client uploads
       },
       (error, result) => {
         if (error) return reject(error);
@@ -33,10 +34,13 @@ export async function uploadPdf(buffer: Buffer, folder: string) {
   return uploadFile(buffer, folder, "raw");
 }
 
-
-
 export async function deleteFile(publicId: string) {
-  return cloudinary.uploader.destroy(publicId, {
+  // Try deleting as raw resource
+  await cloudinary.uploader.destroy(publicId, {
     resource_type: "raw",
+  });
+  // Also try deleting as image resource just in case
+  await cloudinary.uploader.destroy(publicId, {
+    resource_type: "image",
   });
 }

@@ -2,6 +2,8 @@ import { requireUser } from "@/lib/auth-user";
 import resumeService from "@/services/resume.service";
 import { NextRequest, NextResponse } from "next/server";
 
+export const maxDuration = 60; // 60 seconds max duration for file upload processing
+
 
 
 export async function GET(req: NextRequest){

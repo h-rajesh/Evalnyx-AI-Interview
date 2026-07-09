@@ -1,6 +1,8 @@
 import { requireUser } from "@/lib/auth-user";
 import interviewService from "@/services/interview.service";
 import { NextRequest, NextResponse } from "next/server";
+import analyticsEngine from "@/services/analytics/analytics-engine.service";
+import reportGeneratorService from "@/services/report/report-generator.service";
 
 type Params = Promise<{ id: string }>;
 
@@ -43,6 +45,11 @@ export async function PATCH(
         const body = await req.json();
 
         const updated = await interviewService.updateInterview(id, body);
+
+        if (body.status === "COMPLETED") {
+            await analyticsEngine.generateReport(id);
+            await reportGeneratorService.generate(id);
+        }
 
         return NextResponse.json({
             success: true,
