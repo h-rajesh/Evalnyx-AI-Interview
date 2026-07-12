@@ -63,21 +63,45 @@ class VoiceEngine {
 
   private volumeSamples = 0;
 
+  reset() {
+    this.state = {
+      transcript: "",
+      words: 0,
+      wordsPerMinute: 0,
+      fillerCount: 0,
+      speakingTime: 0,
+      silenceTime: 0,
+      averageVolume: 0,
+      currentVolume: 0,
+      responseDelay: 0,
+      confidence: 100,
+      speaking: false,
+      lastSpeechStarted: null,
+      lastSpeechEnded: null,
+    };
+    this.interviewStarted = Date.now();
+    this.questionFinishedAt = null;
+    this.totalVolume = 0;
+    this.volumeSamples = 0;
+  }
+
   updateTranscript(
     transcript: string,
     isFinal: boolean
   ) {
     this.state.transcript = transcript;
 
-    if (!isFinal) return this.getState();
+    const currentWords = transcript
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean).length;
 
-    const words =
-      transcript
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
+    // Total words is finalized words + current active segment words (if not final yet)
+    const totalWords = this.state.words + (isFinal ? 0 : currentWords);
 
-    this.state.words += words.length;
+    if (isFinal) {
+      this.state.words += currentWords;
+    }
 
     const elapsedMinutes =
       (Date.now() - this.interviewStarted) /
@@ -87,7 +111,7 @@ class VoiceEngine {
       elapsedMinutes > 0
         ? Number(
             (
-              this.state.words /
+              totalWords /
               elapsedMinutes
             ).toFixed(1)
           )
@@ -106,6 +130,7 @@ class VoiceEngine {
     ];
 
     const lower = transcript.toLowerCase();
+    let currentSegmentFillers = 0;
 
     fillers.forEach((word) => {
       const regex = new RegExp(
@@ -113,14 +138,19 @@ class VoiceEngine {
         "g"
       );
 
-      const matches =
-        lower.match(regex);
+      const matches = lower.match(regex);
 
       if (matches) {
-        this.state.fillerCount +=
-          matches.length;
+        currentSegmentFillers += matches.length;
       }
     });
+
+    if (isFinal) {
+      this.state.fillerCount += currentSegmentFillers;
+    }
+
+    const activeFillerCount = this.state.fillerCount + (isFinal ? 0 : currentSegmentFillers);
+    this.calculateConfidence(activeFillerCount);
 
     return this.getState();
   }
@@ -183,31 +213,22 @@ class VoiceEngine {
       Date.now();
   }
 
-  private calculateConfidence() {
+  private calculateConfidence(activeFillerCount?: number) {
     let score = 100;
 
-    if (
-      this.state.wordsPerMinute < 80
-    )
+    if (this.state.wordsPerMinute < 80)
       score -= 20;
 
-    if (
-      this.state.wordsPerMinute >
-      180
-    )
+    if (this.state.wordsPerMinute > 180)
       score -= 10;
 
-    score -=
-      this.state.fillerCount * 2;
+    const currentFillers = activeFillerCount !== undefined ? activeFillerCount : this.state.fillerCount;
+    score -= currentFillers * 2;
 
-    if (
-      this.state.responseDelay >
-      5000
-    )
+    if (this.state.responseDelay > 5000)
       score -= 15;
 
-    this.state.confidence =
-      Math.max(0, score);
+    this.state.confidence = Math.max(0, score);
   }
 
   getState() {

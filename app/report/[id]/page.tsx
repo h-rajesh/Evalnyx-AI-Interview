@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+
+import { useInterviewReport } from "@/hooks/useInterviewReport";
 import {
   ArrowLeft,
   Download,
@@ -34,66 +36,92 @@ import { Progress } from "@/components/ui/progress";
 import { ScoreRing } from "@/components/common/ScoreRing";
 import { Logo } from "@/components/common/Logo";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
+import QuestionReview from "@/components/report/QuestionReview";
+import LearningRoadmap from "@/components/report/LearningRoadmap";
+import SuggestedAnswers from "@/components/report/SuggestedAnswers";
+import ReplayTimeline from "@/components/report/ReplayTimeline";
 
 import { reportData } from "@/lib/mock-data";
-
-const metrics = [
-  {
-    label: "Technical",
-    value: reportData.technical,
-    suffix: "%",
-    icon: Gauge,
-  },
-  {
-    label: "Communication",
-    value: reportData.communication,
-    suffix: "%",
-    icon: TrendingUp,
-  },
-  {
-    label: "Confidence",
-    value: reportData.confidence,
-    suffix: "%",
-    icon: Sparkles,
-  },
-  {
-    label: "Grammar",
-    value: reportData.grammar,
-    suffix: "%",
-    icon: SpellCheck,
-  },
-  {
-    label: "Eye Contact",
-    value: reportData.eyeContact,
-    suffix: "%",
-    icon: Eye,
-  },
-  {
-    label: "Posture",
-    value: reportData.posture,
-    suffix: "%",
-    icon: Activity,
-  },
-  {
-    label: "Speaking Speed",
-    value: reportData.speakingSpeed,
-    suffix: " wpm",
-    icon: Activity,
-  },
-  {
-    label: "Filler Words",
-    value: reportData.fillerWords,
-    suffix: "",
-    icon: MessageSquareWarning,
-  },
-];
 
 export default function ReportPage() {
   const params = useParams();
   const id = params.id as string;
 
+  const { data, isLoading, error } = useInterviewReport(id);
+  const report = data?.report;
+  const replay = data?.replay;
+
+  if (isLoading) {
+    return (
+      <div className="p-10">
+        Loading Report...
+      </div>
+    );
+  }
+
+  if (error || !report) {
+    return (
+      <div className="p-10 text-red-500">
+        Failed to load report.
+      </div>
+    );
+  }
+
+  const metrics = [
+    {
+      label: "Technical",
+      value: report.technicalScore,
+      suffix: "%",
+      icon: Gauge,
+    },
+    {
+      label: "Communication",
+      value: report.communicationScore,
+      suffix: "%",
+      icon: TrendingUp,
+    },
+    {
+      label: "Confidence",
+      value: report.confidenceScore,
+      suffix: "%",
+      icon: Sparkles,
+    },
+    {
+      label: "Grammar",
+      value: reportData.grammar,
+      suffix: "%",
+      icon: SpellCheck,
+    },
+    {
+      label: "Eye Contact",
+      value: reportData.eyeContact,
+      suffix: "%",
+      icon: Eye,
+    },
+    {
+      label: "Posture",
+      value: reportData.posture,
+      suffix: "%",
+      icon: Activity,
+    },
+    {
+      label: "Speaking Speed",
+      value: reportData.speakingSpeed,
+      suffix: " wpm",
+      icon: Activity,
+    },
+    {
+      label: "Filler Words",
+      value: reportData.fillerWords,
+      suffix: "",
+      icon: MessageSquareWarning,
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
+
+
 
       {/* Header */}
 
@@ -159,7 +187,7 @@ export default function ReportPage() {
             <CardContent className="grid items-center gap-6 p-6 sm:grid-cols-[auto_1fr] sm:p-8">
               <div className="flex justify-center">
                 <ScoreRing
-                  value={reportData.overall}
+                  value={report.overallScore}
                   size={150}
                   stroke={12}
                   label="Overall"
@@ -168,22 +196,21 @@ export default function ReportPage() {
 
               <div className="space-y-3 text-center sm:text-left">
                 <Badge variant="secondary" className="rounded-full">
-                  Senior Frontend Engineer · Technical
+                  {report.interview.jobRole} · {report.interview.interviewType}
                 </Badge>
 
                 <h1 className="font-display text-2xl font-bold sm:text-3xl">
-                  Great performance! 🎉
+                  {report.recommendation}
                 </h1>
 
                 <p className="text-sm text-muted-foreground">
-                  You scored higher than 82% of candidates at this level.
-                  Your technical depth and clarity stood out.
+                  {report.summary}
                 </p>
 
                 <div className="flex flex-wrap justify-center gap-4 pt-1 sm:justify-start">
                   <span className="text-sm">
                     <span className="font-display text-lg font-bold text-success">
-                      {reportData.technical}%
+                      {report.technicalScore}%
                     </span>{" "}
                     <span className="text-muted-foreground">
                       Technical
@@ -192,7 +219,7 @@ export default function ReportPage() {
 
                   <span className="text-sm">
                     <span className="font-display text-lg font-bold text-primary">
-                      {reportData.communication}%
+                      {report.communicationScore}%
                     </span>{" "}
                     <span className="text-muted-foreground">
                       Communication
@@ -239,7 +266,12 @@ export default function ReportPage() {
             </motion.div>
           ))}
         </div>
-                {/* Strengths & Weaknesses */}
+
+        <QuestionReview
+          evaluations={report.interview.evaluations}
+        />
+
+        {/* Strengths & Weaknesses */}
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="border-border/60 shadow-soft">
             <CardHeader>
@@ -250,14 +282,8 @@ export default function ReportPage() {
             </CardHeader>
 
             <CardContent className="space-y-3">
-              {reportData.strengths.map((item) => (
-                <div
-                  key={item}
-                  className="flex items-start gap-2.5 text-sm"
-                >
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <span>{item}</span>
-                </div>
+              {report.strengths?.map((item, index) => (
+                <li key={index}>{item}</li>
               ))}
             </CardContent>
           </Card>
@@ -271,86 +297,41 @@ export default function ReportPage() {
             </CardHeader>
 
             <CardContent className="space-y-3">
-              {reportData.weaknesses.map((item) => (
-                <div
-                  key={item}
-                  className="flex items-start gap-2.5 text-sm"
-                >
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                  <span>{item}</span>
-                </div>
+              {report.weaknesses?.map((item, index) => (
+                <li key={index}>{item}</li>
               ))}
             </CardContent>
           </Card>
         </div>
 
-        {/* Suggested Answers */}
-        <Card className="border-border/60 shadow-soft">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Lightbulb className="h-4 w-4 text-primary" />
-              Suggested Answers
-            </CardTitle>
-          </CardHeader>
+        <LearningRoadmap
+          items={(report.learningRoadmap as any) ?? []}
+        />
 
-          <CardContent className="space-y-4">
-            {reportData.suggestedAnswers.map((answer) => (
-              <div
-                key={answer.q}
-                className="rounded-xl border border-border/60 bg-muted/30 p-4"
-              >
-                <p className="text-sm font-semibold">
-                  {answer.q}
-                </p>
+        <SuggestedAnswers
+          answers={(report.suggestedAnswers as any) ?? []}
+        />
 
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  {answer.a}
-                </p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-                {/* Learning Roadmap */}
-        <Card className="border-border/60 shadow-soft">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Map className="h-4 w-4 text-primary" />
-              Learning Roadmap
-            </CardTitle>
-          </CardHeader>
+        <div className="rounded-xl border p-6 space-y-4">
+          <h2 className="text-2xl font-bold">
+            Career Advice
+          </h2>
 
-          <CardContent className="space-y-3">
-            {reportData.roadmap.map((item, index) => (
-              <div
-                key={item.title}
-                className="flex items-start gap-3 rounded-xl border border-border/60 p-4"
-              >
-                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full gradient-primary text-xs font-bold text-primary-foreground">
-                  {index + 1}
-                </div>
+          <p className="text-muted-foreground">
+            {report.careerAdvice}
+          </p>
 
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold">
-                      {item.title}
-                    </p>
+          <div className="pt-4 border-t">
+            <span className="font-medium">Recommended Next Difficulty:</span>{" "}
+            <span className="font-semibold">
+              {report.nextInterviewDifficulty}
+            </span>
+          </div>
+        </div>
 
-                    <Badge
-                      variant="secondary"
-                      className="rounded-full text-xs"
-                    >
-                      {item.status}
-                    </Badge>
-                  </div>
-
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {item.desc}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <ReplayTimeline
+          events={replay?.timeline ?? []}
+        />
 
         {/* Footer Buttons */}
         <div className="flex flex-wrap justify-center gap-3">

@@ -2,25 +2,43 @@ import { PrismaClient } from "../app/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
-const prismaClientSingleton = () => {
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL!,
-    ssl: { rejectUnauthorized: false }, // important for NeonDB
-    max: 2,
-    idleTimeoutMillis: 15000, // Close idle connections after 15 seconds to free Neon connection slots
-  });
-  const adapter = new PrismaPg(pool);
-  return new PrismaClient({ adapter });
-};
+const connectionString = process.env.DATABASE_URL!;
 
 declare const globalThis: {
-  prismaGlobal?: ReturnType<typeof prismaClientSingleton>;
+  prismaGlobal?: PrismaClient;
+  poolGlobal?: Pool;
 } & typeof global;
 
-const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
+let pool: Pool;
+let prisma: PrismaClient;
+
+if (process.env.NODE_ENV === "production") {
+  pool = new Pool({
+    connectionString,
+    ssl: { rejectUnauthorized: false },
+    max: 10,
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 15000,
+  });
+  const adapter = new PrismaPg(pool);
+  prisma = new PrismaClient({ adapter });
+} else {
+  if (!globalThis.poolGlobal) {
+    globalThis.poolGlobal = new Pool({
+      connectionString,
+      ssl: { rejectUnauthorized: false },
+      max: 10,
+      connectionTimeoutMillis: 10000,
+      idleTimeoutMillis: 15000,
+    });
+  }
+  pool = globalThis.poolGlobal;
+
+  if (!globalThis.prismaGlobal) {
+    const adapter = new PrismaPg(pool);
+    globalThis.prismaGlobal = new PrismaClient({ adapter });
+  }
+  prisma = globalThis.prismaGlobal;
+}
 
 export default prisma;
-
-if (process.env.NODE_ENV !== "production") {
-  globalThis.prismaGlobal = prisma;
-}

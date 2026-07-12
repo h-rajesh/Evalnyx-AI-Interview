@@ -1,5 +1,6 @@
 import behaviorEngine from "./behavior/behavior-engine.service";
 import voiceEngine from "./voice/voice-engine.service";
+import behaviorScoreService from "./behavior/behavior-score.service";
 
 class SnapshotService {
   private timer: NodeJS.Timeout | null = null;
@@ -13,6 +14,7 @@ class SnapshotService {
       try {
         const behavior = behaviorEngine.getState();
         const voice = voiceEngine.getState();
+        const scores = behaviorScoreService.calculate(behavior, voice);
 
         const second = Math.floor(
           (Date.now() - startedAt) / 1000
@@ -26,8 +28,8 @@ class SnapshotService {
           body: JSON.stringify({
             interviewId,
             second,
-            attention: behavior.eyeContact,
-            confidence: voice.confidence,
+            attention: scores.attention,
+            confidence: scores.confidence,
             eyeContact: behavior.eyeContact,
             headDirection: behavior.headDirection,
             emotion: "UNKNOWN",

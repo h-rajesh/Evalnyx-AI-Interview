@@ -366,11 +366,12 @@ model IntegrityEvent {
 }
 
 model InterviewReport {
+
   id String @id @default(cuid())
 
   interviewId String @unique
 
-  interview Interview @relation(fields:[interviewId], references:[id], onDelete:Cascade)
+  interview Interview @relation(fields:[interviewId],references:[id],onDelete:Cascade)
 
   overallScore Float
 
@@ -394,7 +395,13 @@ model InterviewReport {
 
   weaknesses Json?
 
-  improvementPlan Json?
+  learningRoadmap Json?
+
+  suggestedAnswers Json?
+
+  careerAdvice String?
+
+  nextInterviewDifficulty String?
 
   createdAt DateTime @default(now())
 

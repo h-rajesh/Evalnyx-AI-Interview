@@ -7,13 +7,17 @@ import {
   RoomAudioRenderer,
   VideoTrack,
   useTracks,
+  useRoomContext,
 } from "@livekit/components-react";
 import "@livekit/components-styles";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import BehaviorAnalyzer from "./BehaviorAnalyzer";
 import IntegrityMonitor from "./IntegrityMonitor";
 import voiceEngine from "@/services/voice/voice-engine.service";
 import snapshotService from "@/services/snapshot.service";
+import interviewSessionService from "@/services/interview-session.service";
+import { useInterviewStore } from "@/stores/interview-store";
+import { useVoiceStore } from "@/stores/voice-store";
 
 // Silence noisy LiveKit client SDK internal logs
 try {
@@ -57,6 +61,26 @@ function LocalVideoView({ cameraOn }: { cameraOn: boolean }) {
   );
 }
 
+function MediaController({
+  micOn,
+  cameraOn,
+}: {
+  micOn: boolean;
+  cameraOn: boolean;
+}) {
+  const room = useRoomContext();
+
+  useEffect(() => {
+    room.localParticipant.setCameraEnabled(cameraOn);
+  }, [cameraOn, room]);
+
+  useEffect(() => {
+    room.localParticipant.setMicrophoneEnabled(micOn);
+  }, [micOn, room]);
+
+  return null;
+}
+
 export default function LiveInterview({
   token,
   serverUrl,
@@ -72,14 +96,61 @@ export default function LiveInterview({
   console.log("Server URL:", serverUrl);
   const room = useMemo(() => new Room(), []);
   const [connectError, setConnectError] = useState<Error | null>(null);
+  const hasStartedInterview = useRef(false);
+  const localTracksRef = useRef<any[]>([]);
+
+  useEffect(() => {
+    const handleLocalTrackPublished = (pub: any) => {
+      if (pub.track) {
+        console.log("Local track published, adding to ref:", pub.track.kind);
+        localTracksRef.current.push(pub.track);
+      }
+    };
+    room.on(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
+    return () => {
+      room.off(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
+    };
+  }, [room]);
 
   useEffect(() => {
     return () => {
       try {
+        interviewSessionService.stop();
+
         console.log("LiveInterview unmounting, disconnecting room...");
+
+        // Explicitly stop all local tracks to release camera/mic access
+        if (room.localParticipant) {
+          room.localParticipant.videoTrackPublications.forEach((pub: any) => {
+            if (pub.track) {
+              console.log("Stopping local video track...");
+              pub.track.stop();
+            }
+          });
+          room.localParticipant.audioTrackPublications.forEach((pub: any) => {
+            if (pub.track) {
+              console.log("Stopping local audio track...");
+              pub.track.stop();
+            }
+          });
+        }
+
+        // Stop all tracks in our local ref to release camera/mic access
+        localTracksRef.current.forEach((track) => {
+          try {
+            console.log("Stopping local track from ref:", track.kind);
+            track.stop();
+          } catch (err) {
+            console.warn("Failed to stop track from ref:", err);
+          }
+        });
+
         room.disconnect();
       } catch (err) {
-        console.warn("Failed to disconnect LiveKit room gracefully:", err);
+        console.warn(
+          "Failed to disconnect LiveKit room gracefully:",
+          err
+        );
       }
     };
   }, [room]);
@@ -89,7 +160,8 @@ export default function LiveInterview({
       const me = room.localParticipant;
       if (!me) return;
       const speaking = speakers.some((s) => s.identity === me.identity);
-      voiceEngine.updateSpeaking(speaking, me.audioLevel);
+      const state = voiceEngine.updateSpeaking(speaking, me.audioLevel);
+      useVoiceStore.getState().setVoice(state);
     };
 
     room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakersChanged);
@@ -141,10 +213,26 @@ export default function LiveInterview({
       video={cameraOn}
       audio={micOn}
       screen={screenShareOn}
-      onConnected={() => {
-        console.log("✅ Connected to LiveKit");
-        setConnectError(null);
-      }}
+      onConnected={async () => {
+  console.log("✅ Connected to LiveKit");
+
+  setConnectError(null);
+
+  if (!id) return;
+
+  if (hasStartedInterview.current) return;
+
+  hasStartedInterview.current = true;
+
+  try {
+    await interviewSessionService.start(id);
+  } catch (error) {
+    console.error(
+      "Failed to start interview:",
+      error
+    );
+  }
+}}
       onDisconnected={() => {
         console.log("❌ Disconnected");
       }}
@@ -152,12 +240,16 @@ export default function LiveInterview({
         console.error("❌ LiveKit Error:", err);
         setConnectError(err);
       }}
-      onMediaDeviceFailure={(kind, error) => {
-        console.error(`❌ ${kind} failed:`, error);
+      onMediaDeviceFailure={(failure, deviceKind) => {
+        console.error(`❌ Media device failure: ${deviceKind} failed with error ${failure}`);
+        if (deviceKind === "audioinput" && failure === "PermissionDenied") {
+          useInterviewStore.getState().setMicPermissionDenied(true);
+        }
       }}
       data-lk-theme="default"
       style={{ height: "100%", width: "100%" }}
     >
+      <MediaController micOn={micOn} cameraOn={cameraOn} />
       <LocalVideoView cameraOn={cameraOn} />
       <RoomAudioRenderer />
       <BehaviorAnalyzer interviewId={id || ""} />

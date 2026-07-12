@@ -14,9 +14,23 @@ interface InterviewStore {
 
   transcript: string;
 
+  interimTranscript: string;
+
+  finalTranscript: string;
+
+  speechSegments: string[];
+
   aiSpeaking: boolean;
 
   userSpeaking: boolean;
+
+  topic: string;
+
+  difficulty: string;
+
+  followUp: boolean;
+
+  micPermissionDenied: boolean;
 
   setState: (state: InterviewState) => void;
 
@@ -24,13 +38,35 @@ interface InterviewStore {
 
   setTranscript: (text: string) => void;
 
+  setInterimTranscript: (text: string) => void;
+
+  setFinalTranscript: (text: string) => void;
+
+  clearTranscript: () => void;
+
+  addSpeechSegment: (segment: string) => void;
+
+  clearSpeechSegments: () => void;
+
   nextQuestion: () => void;
+
+  setQuestionNumber: (num: number) => void;
+
+  setTotalQuestions: (num: number) => void;
 
   setAISpeaking: (value: boolean) => void;
 
   setUserSpeaking: (value: boolean) => void;
 
   initialize: (totalQuestions: number) => void;
+
+  setTopic: (topic: string) => void;
+
+  setDifficulty: (difficulty: string) => void;
+
+  setFollowUp: (value: boolean) => void;
+
+  setMicPermissionDenied: (value: boolean) => void;
 }
 
 export const useInterviewStore =
@@ -45,15 +81,36 @@ export const useInterviewStore =
 
     transcript: "",
 
+    interimTranscript: "",
+
+    finalTranscript: "",
+
+    speechSegments: [],
+
     aiSpeaking: false,
 
     userSpeaking: false,
+
+    topic: "",
+
+    difficulty: "MEDIUM",
+
+    followUp: false,
+
+    micPermissionDenied: false,
 
     initialize: (totalQuestions) =>
       set({
         totalQuestions,
         questionNumber: 1,
         question: "",
+        speechSegments: [],
+        topic: "",
+        difficulty: "MEDIUM",
+        followUp: false,
+        interimTranscript: "",
+        finalTranscript: "",
+        micPermissionDenied: false,
       }),
 
     setState: (state) =>
@@ -71,13 +128,52 @@ export const useInterviewStore =
         transcript,
       }),
 
+    setInterimTranscript: (text) =>
+      set({
+        interimTranscript: text,
+      }),
+
+    setFinalTranscript: (text) =>
+      set({
+        finalTranscript: text,
+      }),
+
+    clearTranscript: () =>
+      set({
+        interimTranscript: "",
+        finalTranscript: "",
+        transcript: "",
+      }),
+
+    addSpeechSegment: (segment) =>
+      set((state) => ({
+        speechSegments: [...state.speechSegments, segment],
+      })),
+
+    clearSpeechSegments: () =>
+      set({
+        speechSegments: [],
+      }),
+
     nextQuestion: () =>
       set((state) => ({
         questionNumber:
           state.questionNumber + 1,
 
         transcript: "",
+        interimTranscript: "",
+        finalTranscript: "",
       })),
+
+    setQuestionNumber: (questionNumber) =>
+      set({
+        questionNumber,
+      }),
+
+    setTotalQuestions: (totalQuestions) =>
+      set({
+        totalQuestions,
+      }),
 
     setAISpeaking: (value) =>
       set({
@@ -87,6 +183,26 @@ export const useInterviewStore =
     setUserSpeaking: (value) =>
       set({
         userSpeaking: value,
+      }),
+
+    setTopic: (topic) =>
+      set({
+        topic,
+      }),
+
+    setDifficulty: (difficulty) =>
+      set({
+        difficulty,
+      }),
+
+    setFollowUp: (followUp) =>
+      set({
+        followUp,
+      }),
+
+    setMicPermissionDenied: (value) =>
+      set({
+        micPermissionDenied: value,
       }),
   }));
 

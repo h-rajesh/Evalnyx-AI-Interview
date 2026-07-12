@@ -41,6 +41,7 @@ import CameraPreview from "@/components/interview/CameraPreview";
 import LiveInterview from "@/components/interview/LiveInterview";
 import snapshotService from "@/services/snapshot.service";
 import { useInterviewStore } from "@/stores/interview-store";
+import { useBehaviorScoreStore } from "@/stores/behavior-score-store";
 import interviewOrchestrator from "@/services/interview-orchestrator.service";
 import { InterviewState } from "@/types/interview-state";
 import aiSpeechService from "@/services/ai-speech.service";
@@ -65,17 +66,98 @@ function useTimer(active: boolean) {
   return `${mm}:${ss}`;
 }
 
+const statusMap: Record<string, string> = {
+  GENERATING_QUESTION: "Preparing Question",
+  AI_SPEAKING: "Asking Question",
+  LISTENING: "Listening",
+  USER_SPEAKING: "Listening",
+  PROCESSING_ANSWER: "Evaluating",
+  EVALUATING: "Evaluating",
+  COMPLETED: "Interview Finished"
+};
+
+const tips = [
+  "Structure your answer before speaking.",
+  "Explain your reasoning clearly.",
+  "Use examples from real projects.",
+  "Keep eye contact with the camera.",
+  "Think aloud when solving problems.",
+  "Don't rush to the final answer.",
+  "State assumptions before designing."
+];
+
 export default function InterviewRoom() {
   const router = useRouter();
   const params = useParams();
 
   const id = params.id as string;
 
-  const state = useInterviewStore((s) => s.state);
-  const transcript = useInterviewStore((s) => s.transcript);
-  const question = useInterviewStore((s) => s.question);
-  const questionNumber = useInterviewStore((s) => s.questionNumber);
-  const totalQuestions = useInterviewStore((s) => s.totalQuestions);
+  const {
+    question,
+    topic,
+    difficulty,
+    followUp,
+    state,
+    questionNumber,
+    totalQuestions,
+    speechSegments,
+    interimTranscript,
+    finalTranscript,
+    aiSpeaking,
+    micPermissionDenied,
+  } = useInterviewStore();
+
+  const liveSpeech = finalTranscript || interimTranscript;
+
+  const {
+    attention,
+    confidence,
+    communication,
+    professionalism,
+    behavior
+  } = useBehaviorScoreStore();
+
+  const isSubmitting =
+    state === InterviewState.EVALUATING ||
+    state === InterviewState.PROCESSING_ANSWER ||
+    state === InterviewState.GENERATING_QUESTION;
+
+  const loading = state === InterviewState.GENERATING_QUESTION;
+
+  const [answer, setAnswer] = useState("");
+  const [submittedAnswer, setSubmittedAnswer] = useState("");
+
+  const combinedUserSpeech = [...speechSegments, liveSpeech].filter(Boolean).join(" ");
+
+
+
+  useEffect(() => {
+    const segmentsText = speechSegments.join(" ");
+    const combined = [segmentsText, liveSpeech].filter(Boolean).join(" ");
+    if (combined !== answer) {
+      setAnswer(combined);
+    }
+  }, [speechSegments, liveSpeech, answer]);
+
+  useEffect(() => {
+    setAnswer("");
+    setSubmittedAnswer("");
+  }, [questionNumber]);
+
+  const submitAnswer = async () => {
+    if (!answer.trim()) return;
+    setSubmittedAnswer(answer.trim());
+    await interviewSession.submitAnswer(answer.trim());
+  };
+
+  const editAnswer = () => {
+    setAnswer(submittedAnswer);
+    setSubmittedAnswer("");
+    useInterviewStore.getState().clearSpeechSegments();
+    if (submittedAnswer.trim()) {
+      useInterviewStore.getState().addSpeechSegment(submittedAnswer);
+    }
+  };
 
   useEffect(() => {
     aiSpeechService.init();
@@ -160,17 +242,14 @@ export default function InterviewRoom() {
     startInterview();
   }, [id, isStarted]);
 
-  const transcriptRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to the bottom of the transcript as new messages arrive
+  // Auto-scroll to the bottom of the transcript as new speech arrives
   useEffect(() => {
-    if (transcriptRef.current) {
-      transcriptRef.current.scrollTo({
-        top: transcriptRef.current.scrollHeight,
-        behavior: "smooth",
-      });
-    }
-  }, [transcript]);
+    bottomRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  }, [interimTranscript, finalTranscript]);
 
   const progress = (questionNumber / totalQuestions) * 100;
 
@@ -460,16 +539,55 @@ export default function InterviewRoom() {
         </div>
       </div>
 
+      {micPermissionDenied && (
+        <div className="bg-destructive/15 border-b border-destructive/30 px-4 py-3 sm:px-6 text-destructive flex items-center justify-between gap-3 text-xs sm:text-sm">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 animate-bounce" />
+            <span>
+              <strong>Microphone access blocked:</strong> The interview requires microphone permission to listen to your responses. Please click the camera/microphone icon in your browser's address bar, select <strong>Allow</strong>, and refresh the page.
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 border-destructive/30 hover:bg-destructive/10 text-destructive text-[11px] rounded-lg cursor-pointer shrink-0 animate-pulse"
+            onClick={() => window.location.reload()}
+          >
+            Refresh Page
+          </Button>
+        </div>
+      )}
+
       <main className="mx-auto grid w-full max-w-6xl min-h-0 flex-1 gap-3 overflow-y-auto p-3 sm:p-4 lg:grid-cols-[240px_1fr_320px] lg:overflow-hidden">
         {/* AI Interviewer */}
 
         <Card className="flex flex-col items-center gap-4 border-border/60 p-6 text-center shadow-soft lg:h-full">
           <motion.div
-            animate={{ scale: [1, 1.04, 1] }}
-            transition={{
-              repeat: Infinity,
-              duration: 2.5,
+            variants={{
+              idle: {
+                scale: [1, 1.04, 1],
+                boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                transition: {
+                  repeat: Infinity,
+                  duration: 2.5,
+                  ease: "easeInOut"
+                }
+              },
+              speaking: {
+                scale: [1, 1.08, 0.98, 1.04, 1],
+                boxShadow: [
+                  "0px 0px 0px 0px rgba(139, 92, 246, 0)",
+                  "0px 0px 20px 6px rgba(139, 92, 246, 0.6)",
+                  "0px 0px 0px 0px rgba(139, 92, 246, 0)"
+                ],
+                transition: {
+                  repeat: Infinity,
+                  duration: 1.5,
+                  ease: "easeInOut"
+                }
+              }
             }}
+            animate={aiSpeaking ? "speaking" : "idle"}
             className="grid h-20 w-20 place-items-center rounded-2xl gradient-primary shadow-elevated"
           >
             <Bot className="h-10 w-10 text-primary-foreground" />
@@ -481,17 +599,46 @@ export default function InterviewRoom() {
             </p>
 
             <p className="text-xs text-muted-foreground">
-              Senior Engineer Panel
+              {statusMap[state] || "Senior Engineer Panel"}
             </p>
           </div>
 
           <Badge
-            variant="secondary"
-            className="gap-1.5 rounded-full"
+            variant={aiSpeaking ? "default" : "secondary"}
+            className={cn(
+              "gap-1.5 rounded-full transition-all duration-300",
+              aiSpeaking && "bg-primary text-primary-foreground shadow-soft animate-pulse"
+            )}
           >
-            <AudioLines className="h-3.5 w-3.5 text-primary" />
-            Speaking
+            {aiSpeaking ? "🔊 Speaking" : "💤 Waiting"}
           </Badge>
+
+          {topic && (
+            <div className="mt-1 w-full rounded-xl bg-muted/40 p-2.5 text-left text-[11px] space-y-1.5 border border-border/30">
+              <div className="flex justify-between items-center text-muted-foreground">
+                <span>Topic:</span>
+                <span className="font-semibold text-foreground truncate max-w-[120px]">{topic}</span>
+              </div>
+              <div className="flex justify-between items-center text-muted-foreground">
+                <span>Difficulty:</span>
+                <span className={cn(
+                  "font-bold px-1.5 py-0.5 rounded text-[10px]",
+                  difficulty === "EASY" && "bg-success/10 text-success",
+                  difficulty === "MEDIUM" && "bg-warning/10 text-warning",
+                  difficulty === "HARD" && "bg-destructive/10 text-destructive",
+                  difficulty !== "EASY" && difficulty !== "MEDIUM" && difficulty !== "HARD" && "bg-primary/10 text-primary"
+                )}>{difficulty}</span>
+              </div>
+              {followUp && (
+                <div className="flex justify-between items-center text-muted-foreground">
+                  <span>Type:</span>
+                  <Badge variant="outline" className="text-[9px] h-4 px-1 border-primary/30 text-primary bg-primary/5">
+                    Follow-up
+                  </Badge>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mt-2 w-full rounded-xl bg-muted/50 p-3 text-left text-xs text-muted-foreground">
             <p className="flex items-center gap-1.5 font-medium text-foreground">
@@ -500,7 +647,7 @@ export default function InterviewRoom() {
             </p>
 
             <p className="mt-1">
-              Use the STAR method to structure your answer.
+              {tips[questionNumber % tips.length]}
             </p>
           </div>
         </Card>
@@ -509,18 +656,59 @@ export default function InterviewRoom() {
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:h-full">
           {/* Question Box */}
-          <Card className="border-border/60 px-3.5 py-3 shadow-soft shrink-0">
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="secondary"
-                className="rounded-full px-2 py-0.5 text-[10px]"
+          <Card className="border-border/60 px-4 py-4 shadow-soft shrink-0 min-h-[140px] flex flex-col justify-center">
+            {loading ? (
+              <div className="space-y-4 animate-pulse">
+                <div className="h-5 w-32 rounded bg-muted" />
+                <div className="h-8 w-full rounded bg-muted" />
+                <div className="h-8 w-3/4 rounded bg-muted" />
+              </div>
+            ) : (
+              <motion.div
+                key={question}
+                initial={{
+                  opacity: 0,
+                  y: 20,
+                }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                }}
+                exit={{
+                  opacity: 0,
+                  y: -20,
+                }}
+                transition={{
+                  duration: 0.25,
+                }}
+                className="space-y-3"
               >
-                {questionCategory}
-              </Badge>
-            </div>
-            <h2 className="mt-1.5 font-display text-base font-bold leading-snug">
-              {question || "Preparing your interview..."}
-            </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">
+                    {topic || "Interview"}
+                  </Badge>
+                  <Badge
+                    variant={
+                      difficulty === "HARD"
+                        ? "destructive"
+                        : difficulty === "MEDIUM"
+                        ? "secondary"
+                        : "outline"
+                    }
+                  >
+                    {difficulty}
+                  </Badge>
+                  {followUp && (
+                    <Badge variant="outline">
+                      Follow-up
+                    </Badge>
+                  )}
+                </div>
+                <h2 className="text-2xl font-semibold leading-relaxed">
+                  {question}
+                </h2>
+              </motion.div>
+            )}
           </Card>
 
           {/* Live Transcript Box */}
@@ -540,13 +728,77 @@ export default function InterviewRoom() {
             </div>
 
             <div
-              ref={transcriptRef}
-              className="flex-1 overflow-y-auto p-6 scrollbar-thin scroll-smooth flex items-center justify-center text-center bg-muted/10"
+              className="flex-1 space-y-3 overflow-y-auto p-4 scrollbar-thin scroll-smooth"
             >
-              <p className="text-lg font-medium text-foreground/80 leading-relaxed max-w-md animate-pulse">
-                {transcript || "Listening..."}
-              </p>
+              {!interimTranscript && !finalTranscript ? (
+                <p className="text-muted-foreground text-center">
+                  Start speaking to see your live transcript...
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {finalTranscript && (
+                    <p className="text-base leading-7">
+                      {finalTranscript}
+                    </p>
+                  )}
+
+                  {interimTranscript && (
+                    <p className="italic text-muted-foreground">
+                      {interimTranscript}
+                    </p>
+                  )}
+                </div>
+              )}
+              <div ref={bottomRef} />
             </div>
+          </Card>
+
+          {/* Answer composer — review & edit before submitting */}
+          <Card className="border-border/60 p-3 shadow-soft shrink-0">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold">Your Answer</span>
+                {!submittedAnswer && (
+                  <span className="text-[10px] text-muted-foreground">{answer.trim().length} chars</span>
+                )}
+              </div>
+
+              {!submittedAnswer ? (
+                <Button
+                  size="sm"
+                  className="h-7 rounded-lg gradient-primary px-3 text-[11px] text-primary-foreground"
+                  onClick={submitAnswer}
+                  disabled={!answer.trim() || isSubmitting}
+                >
+                  <Send className="mr-1 h-3.5 w-3.5" /> {isSubmitting ? "Submitting..." : "Submit answer"}
+                </Button>
+              ) : (
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="outline" className="h-7 rounded-lg px-2 text-[11px]" onClick={editAnswer} disabled={isSubmitting}>
+                    <Pencil className="mr-1 h-3 w-3" /> Edit
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {submittedAnswer ? (
+              <p className="whitespace-pre-wrap rounded-lg bg-muted/40 p-2.5 text-xs leading-normal">{submittedAnswer}</p>
+            ) : (
+              <Textarea
+                id="answer-textarea"
+                value={answer}
+                onChange={(e) => {
+                  setAnswer(e.target.value);
+                  useInterviewStore.getState().clearSpeechSegments();
+                  if (e.target.value.trim()) {
+                    useInterviewStore.getState().addSpeechSegment(e.target.value);
+                  }
+                }}
+                placeholder={isSubmitting ? "Evaluating your answer..." : "Review, edit, and refine your answer here before submitting…"}
+                disabled={isSubmitting}
+                className="h-16 min-h-[64px] resize-none rounded-lg p-2 text-xs leading-normal disabled:opacity-70"
+              />
+            )}
           </Card>
         </div>
         {/* Right: camera + mic */}
@@ -628,28 +880,36 @@ export default function InterviewRoom() {
           <Card className="grid grid-cols-3 gap-2 border-border/60 p-2.5 text-center shadow-soft">
             {[
               {
+                label: "Attention",
+                value: `${attention}%`,
+              },
+              {
                 label: "Confidence",
-                value: "79%",
+                value: `${confidence}%`,
               },
               {
-                label: "Eye Contact",
-                value: "74%",
+                label: "Communication",
+                value: `${communication}%`,
               },
               {
-                label: "Posture",
-                value: "81%",
+                label: "Professionalism",
+                value: `${professionalism}%`,
+              },
+              {
+                label: "Behavior",
+                value: `${behavior}%`,
               },
             ].map((metric) => (
               <div
                 key={metric.label}
-                className="rounded-lg bg-muted/40 p-2"
+                className="rounded-lg bg-muted/40 p-2 flex flex-col justify-center min-h-[58px]"
               >
-                <p className="font-display text-base font-bold">
-                  {metric.value}
+                <p className="text-[9px] sm:text-[10px] text-muted-foreground mb-0.5">
+                  {metric.label}
                 </p>
 
-                <p className="text-[10px] text-muted-foreground">
-                  {metric.label}
+                <p className="font-display text-xs font-bold sm:text-sm">
+                  {metric.value}
                 </p>
               </div>
             ))}

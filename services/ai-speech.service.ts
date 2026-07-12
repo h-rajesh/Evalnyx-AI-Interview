@@ -83,7 +83,11 @@ class AISpeechService {
       };
 
       this.utterance.onerror = (e) => {
-        console.error(e);
+        if (e.error === "interrupted" || e.error === "canceled") {
+          console.warn("AI Speech synthesis interrupted or canceled.");
+        } else {
+          console.error("AI Speech synthesis error:", e.error);
+        }
 
         this.speaking = false;
 

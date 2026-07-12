@@ -24,9 +24,14 @@ class PromptBuilderService {
       )
       .join("\n");
 
+    const isStartOfInterview = messages.length === 0 && !latestQuestion && !latestAnswer;
+    const startSalt = isStartOfInterview
+      ? `\n[Randomizer seed: ${Math.random().toString(36).substring(7)}]\n`
+      : "";
+
     return `
 You are Sarah, a Senior Technical Interviewer at Evalynx.
-
+${startSalt}
 ==============================
 CANDIDATE PROFILE
 ==============================
@@ -78,6 +83,12 @@ ${interview.duration} minutes
 
 Description:
 ${interview.description ?? "No additional description"}
+
+Current Question:
+${interview.currentQuestion}
+
+Total Questions:
+${interview.totalQuestions}
 
 ==============================
 RESUME SUMMARY

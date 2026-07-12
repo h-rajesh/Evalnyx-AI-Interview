@@ -2,6 +2,7 @@ import interviewOrchestrator from "./interview-orchestrator.service";
 import { InterviewState } from "@/types/interview-state";
 import voiceEngine from "./voice/voice-engine.service";
 import { useInterviewStore } from "@/stores/interview-store";
+import { useVoiceStore } from "@/stores/voice-store";
 
 class SpeechRecognitionService {
   private recognition: any = null;
@@ -52,23 +53,40 @@ class SpeechRecognitionService {
 
     this.recognition.onend = () => {
       this.listening = false;
-
       console.log("🛑 Recognition stopped");
+
+      // Auto-restart if we still have an active callback
+      if (this.answerCallback) {
+        console.log("Speech Recognition: auto-restarting...");
+        try {
+          this.recognition.start();
+        } catch (err) {
+          console.warn("Failed to auto-restart speech recognition:", err);
+        }
+      }
     };
 
     this.recognition.onerror = (e: any) => {
-      console.error(e);
+      if (e.error === "no-speech") {
+        console.warn("Speech Recognition: no speech detected");
+        return;
+      }
+      if (e.error === "not-allowed") {
+        useInterviewStore.getState().setMicPermissionDenied(true);
+      }
+      console.error("Speech Recognition Error:", e.error, e.message);
     };
 
     this.recognition.onresult = (event: any) => {
-      voiceEngine.updateSpeaking(true, 1);
+      const stateVolume = voiceEngine.updateSpeaking(true, 1);
+      useVoiceStore.getState().setVoice(stateVolume);
 
       let text = "";
 
       let final = false;
 
       for (
-        let i = event.resultIndex;
+        let i = 0;
         i < event.results.length;
         i++
       ) {
@@ -81,12 +99,20 @@ class SpeechRecognitionService {
 
       this.transcript = text.trim();
 
-      voiceEngine.updateTranscript(
+      const stateTranscript = voiceEngine.updateTranscript(
         this.transcript,
         final
       );
+      useVoiceStore.getState().setVoice(stateTranscript);
 
-      useInterviewStore.getState().setTranscript(this.transcript);
+      const store = useInterviewStore.getState();
+
+      if (final) {
+        store.setFinalTranscript(this.transcript);
+        store.setInterimTranscript("");
+      } else {
+        store.setInterimTranscript(this.transcript);
+      }
 
       if (this.transcript.length > 0) {
         interviewOrchestrator.transition(
@@ -116,13 +142,17 @@ class SpeechRecognitionService {
       this.transcript
     );
 
-    voiceEngine.updateSpeaking(false, 0);
+    const stateVolumeOff = voiceEngine.updateSpeaking(false, 0);
+    useVoiceStore.getState().setVoice(stateVolumeOff);
 
     interviewOrchestrator.transition(
       InterviewState.PROCESSING_ANSWER
     );
 
-    this.stop();
+    // Call recognition.stop directly instead of this.stop() to keep the callback active
+    if (this.recognition) {
+      this.recognition.stop();
+    }
 
     if (this.answerCallback) {
       await this.answerCallback(
@@ -131,7 +161,9 @@ class SpeechRecognitionService {
     }
 
     this.transcript = "";
-    useInterviewStore.getState().setTranscript("");
+    useInterviewStore
+      .getState()
+      .clearTranscript();
   }
 
   start(
@@ -144,18 +176,30 @@ class SpeechRecognitionService {
     this.answerCallback = callback;
 
     this.transcript = "";
-    useInterviewStore.getState().setTranscript("");
+    useInterviewStore
+      .getState()
+      .clearTranscript();
 
     interviewOrchestrator.transition(
       InterviewState.LISTENING
     );
 
-    this.recognition.start();
+    if (this.listening) {
+      console.log("Speech Recognition is already running. Callback updated.");
+      return;
+    }
+
+    try {
+      this.recognition.start();
+    } catch (err) {
+      console.warn("Failed to start SpeechRecognition:", err);
+    }
   }
 
   stop() {
     if (!this.recognition) return;
 
+    this.answerCallback = null;
     this.recognition.stop();
   }
 

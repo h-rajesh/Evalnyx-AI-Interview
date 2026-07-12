@@ -7,6 +7,8 @@ import PromptBuilderService from "@/services/prompt-builder.service";
 import topicTrackerService from "@/services/topic-tracker.service";
 import interviewService from "@/services/interview.service";
 import InterviewAIService from "@/services/interview-ai.service";
+import timelineService from "@/services/timeline/timeline.service";
+import { TimelineEvents } from "@/constants/timeline-events";
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,6 +24,12 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    await timelineService.create({
+      interviewId,
+      timestamp: 0,
+      type: TimelineEvents.INTERVIEW_STARTED,
+    });
 
     // Fetch all interview context
     const context = await AIContextService.getInterviewContext(interviewId);
@@ -62,6 +70,16 @@ export async function POST(req: NextRequest) {
       MessageRole.ASSISTANT,
       nextQuestion.question
     );
+
+    await timelineService.create({
+      interviewId,
+      timestamp: 1,
+      type: TimelineEvents.AI_QUESTION,
+      data: {
+        question: nextQuestion.question,
+        topic: nextQuestion.topic,
+      },
+    });
 
     return NextResponse.json({
       success: true,

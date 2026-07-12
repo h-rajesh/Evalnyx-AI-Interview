@@ -8,6 +8,8 @@ import topicTrackerService from "@/services/topic-tracker.service";
 import interviewService from "@/services/interview.service";
 import interviewEvaluationService from "@/services/interview-evaluation.service";
 import InterviewAIService from "@/services/interview-ai.service";
+import timelineService from "@/services/timeline/timeline.service";
+import { TimelineEvents } from "@/constants/timeline-events";
 
 export async function POST(req: NextRequest) {
   try {
@@ -43,6 +45,12 @@ export async function POST(req: NextRequest) {
       MessageRole.USER,
       answer
     );
+
+    await timelineService.create({
+      interviewId,
+      timestamp: Math.floor(Date.now() / 1000),
+      type: TimelineEvents.USER_SUBMITTED_ANSWER,
+    });
 
     // Reload context to include updated messages
     context = await AIContextService.getInterviewContext(interviewId);
@@ -86,6 +94,17 @@ export async function POST(req: NextRequest) {
       feedback: evaluation.feedback,
     });
 
+    await timelineService.create({
+      interviewId,
+      timestamp: Math.floor(Date.now() / 1000),
+      type: TimelineEvents.AI_EVALUATED,
+      data: {
+        technical: evaluation.technicalScore,
+        communication: evaluation.communicationScore,
+        confidence: evaluation.confidenceScore,
+      },
+    });
+
     // Update Difficulty
     await interviewService.updateDifficulty(
       interviewId,
@@ -106,17 +125,39 @@ export async function POST(req: NextRequest) {
     // Calculate if completed BEFORE incrementing question counter
     const completed = context.interview.currentQuestion >= context.interview.totalQuestions;
 
-    // Increment Question Counter
-    await interviewService.incrementQuestion(
-      interviewId
-    );
+    let updatedCurrentQuestion = context.interview.currentQuestion;
 
-    // Save the Next AI Question
-    await InterviewMessageService.addMessage(
-      interviewId,
-      MessageRole.ASSISTANT,
-      nextQuestion.question
-    );
+    if (!completed) {
+      // Save the Next AI Question
+      await InterviewMessageService.addMessage(
+        interviewId,
+        MessageRole.ASSISTANT,
+        nextQuestion.question
+      );
+
+      await timelineService.create({
+        interviewId,
+        timestamp: Math.floor(Date.now() / 1000),
+        type: TimelineEvents.AI_QUESTION,
+        data: {
+          question: nextQuestion.question,
+          topic: nextQuestion.topic,
+        },
+      });
+
+      // Increment Question Counter
+      const updatedInterview = await interviewService.incrementQuestion(
+        interviewId
+      );
+      updatedCurrentQuestion = updatedInterview.currentQuestion;
+    } else {
+      // Save the closing message
+      await InterviewMessageService.addMessage(
+        interviewId,
+        MessageRole.ASSISTANT,
+        nextQuestion.question
+      );
+    }
 
     return NextResponse.json({
       success: true,
@@ -126,6 +167,8 @@ export async function POST(req: NextRequest) {
       followUp: nextQuestion.followUp,
       evaluation,
       completed,
+      currentQuestion: updatedCurrentQuestion,
+      totalQuestions: context.interview.totalQuestions,
     });
   } catch (error) {
     console.error(error);

@@ -1,67 +1,75 @@
-import {
-  Interview,
-  InterviewEvaluation,
-  BehaviorSnapshot,
-  IntegrityEvent,
-  InterviewReport,
-} from "@/app/generated/prisma/client";
+import { InterviewEvaluation, InterviewReport } from "@/app/generated/prisma/client";
 
 class ReportPromptService {
-  build(data: {
-    interview: Interview;
-    evaluations: InterviewEvaluation[];
-    snapshots: BehaviorSnapshot[];
-    integrityEvents: IntegrityEvent[];
-    report: InterviewReport;
-  }) {
+  build(
+    report: InterviewReport,
+    evaluations: InterviewEvaluation[]
+  ) {
+    const evaluationSummary = evaluations
+      .map(
+        (e) => `
+Question ${e.questionNumber}
+
+Question:
+${e.question}
+
+Technical Score: ${e.technicalScore}
+
+Communication Score: ${e.communicationScore}
+
+Confidence Score: ${e.confidenceScore}
+
+Correctness Score: ${e.correctnessScore}
+
+Feedback:
+${e.feedback}
+
+Strengths:
+${JSON.stringify(e.strengths)}
+
+Weaknesses:
+${JSON.stringify(e.weaknesses)}
+`
+      )
+      .join("\n\n");
+
     return `
-You are an expert Senior Engineering Hiring Manager.
+You are a Senior Technical Interviewer.
 
-Generate a professional interview report.
+You have completed an interview.
 
-Interview Scores
+Overall Scores:
 
-Technical: ${data.report.technicalScore}
+Overall Score: ${report.overallScore}
 
-Communication: ${data.report.communicationScore}
+Technical: ${report.technicalScore}
 
-Behavior: ${data.report.behaviorScore}
+Communication: ${report.communicationScore}
 
-Confidence: ${data.report.confidenceScore}
+Behavior: ${report.behaviorScore}
 
-Integrity: ${data.report.integrityScore}
+Confidence: ${report.confidenceScore}
 
-Voice: ${data.report.voiceScore}
+Integrity: ${report.integrityScore}
 
-Overall: ${data.report.overallScore}
-
-Recommendation:
-${data.report.recommendation}
+Voice: ${report.voiceScore}
 
 Question Evaluations:
 
-${JSON.stringify(data.evaluations, null, 2)}
+${evaluationSummary}
 
-Behavior Snapshots:
-
-${JSON.stringify(data.snapshots.slice(0, 30), null, 2)}
-
-Integrity Events:
-
-${JSON.stringify(data.integrityEvents, null, 2)}
-
-Return ONLY JSON.
+Return ONLY valid JSON.
 
 {
   "summary":"",
+
+  "recommendation":"",
+
   "strengths":[
     ""
   ],
+
   "weaknesses":[
-    ""
-  ],
-  "recommendation":"",
-  "improvementPlan":[
     ""
   ]
 }

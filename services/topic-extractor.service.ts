@@ -3,7 +3,7 @@ import { gemini } from "@/lib/ai/gemini";
 class TopicExtractorService {
   async extract(question: string): Promise<string> {
     const response = await gemini.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-lite-latest",
       contents: `
 You are an interview topic classifier.
 

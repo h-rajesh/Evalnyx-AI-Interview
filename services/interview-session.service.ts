@@ -1,20 +1,40 @@
 import aiSpeechService from "./ai-speech.service";
 import speechRecognitionService from "./speech-recognition.service";
 import interviewOrchestrator from "./interview-orchestrator.service";
-import { useInterviewStore } from "@/stores/interview-store";
 
 import { InterviewState } from "@/types/interview-state";
+import { useInterviewStore } from "@/stores/interview-store";
+import voiceEngine from "./voice/voice-engine.service";
+import { useVoiceStore } from "@/stores/voice-store";
+import behaviorScoreService from "./behavior/behavior-score.service";
+
+interface StartResponse {
+  success: boolean;
+  question: string;
+  topic: string;
+  difficulty: string;
+  followUp: boolean;
+  currentQuestion?: number;
+  totalQuestions?: number;
+}
+
+interface AnswerResponse extends StartResponse {
+  completed: boolean;
+  evaluation?: any;
+}
 
 class InterviewSessionService {
+  private interviewId = "";
+
+  private running = false;
+
   async start(interviewId: string) {
-    console.log("Interview Started");
+    if (this.running) return;
 
-    await this.askNextQuestion(interviewId);
-  }
+    this.running = true;
 
-  private async askNextQuestion(
-    interviewId: string
-  ) {
+    this.interviewId = interviewId;
+
     interviewOrchestrator.transition(
       InterviewState.GENERATING_QUESTION
     );
@@ -24,63 +44,87 @@ class InterviewSessionService {
         "/api/interview/start",
         {
           method: "POST",
-
           headers: {
             "Content-Type": "application/json",
           },
-
           body: JSON.stringify({
             interviewId,
           }),
         }
       );
 
-      if (!response.ok) {
-        throw new Error(`Server returned status ${response.status}`);
+      const data: StartResponse =
+        await response.json();
+
+      if (!data.success) {
+        throw new Error(
+          "Failed to start interview."
+        );
       }
 
-      const data = await response.json();
+      const store = useInterviewStore.getState();
+      store.setQuestion(data.question);
+      store.setTopic(data.topic);
+      store.setDifficulty(data.difficulty);
+      store.setFollowUp(data.followUp);
 
-      if (data.completed) {
-        return this.finish(interviewId);
+      if (data.currentQuestion !== undefined) {
+        store.setQuestionNumber(data.currentQuestion);
       }
-
-      // Update counter: first question asked should not increment, subsequent should
-      const currentStoreQuestion = useInterviewStore.getState().question;
-      if (currentStoreQuestion) {
-        useInterviewStore.getState().nextQuestion();
+      if (data.totalQuestions !== undefined) {
+        store.setTotalQuestions(data.totalQuestions);
       }
-      useInterviewStore.getState().setQuestion(data.question);
+      store.clearSpeechSegments();
+      store.clearTranscript();
+      voiceEngine.reset();
+      behaviorScoreService.reset();
+      useVoiceStore.getState().setVoice(voiceEngine.getState());
 
       await aiSpeechService.speak(
         data.question
       );
 
       speechRecognitionService.start(
-        async (answer) => {
-          await this.submitAnswer(
-            interviewId,
-            answer
-          );
-        }
+        this.onSpeechSegmentComplete
       );
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error(err);
 
-      interviewOrchestrator.transition(
-        InterviewState.IDLE
-      );
-
-      await aiSpeechService.speak(
-        "I'm sorry, something went wrong. Please try again."
-      );
+      this.running = false;
     }
   }
 
-  private async submitAnswer(
-    interviewId: string,
+  private onSpeechSegmentComplete = async (
+    segment: string
+  ) => {
+    if (!this.running) return;
+
+    console.log("Segment complete:", segment);
+    useInterviewStore.getState().addSpeechSegment(segment);
+
+    // Keep listening
+    speechRecognitionService.start(
+      this.onSpeechSegmentComplete
+    );
+  };
+
+  submitAnswer = async (
     answer: string
-  ) {
+  ) => {
+    if (!this.running) return;
+
+    const currentState = useInterviewStore.getState().state;
+    if (
+      currentState === InterviewState.EVALUATING ||
+      currentState === InterviewState.PROCESSING_ANSWER
+    ) {
+      console.warn("Already submitting an answer. Duplicate request ignored.");
+      return;
+    }
+
+    // Stop speech recognition while evaluating
+    speechRecognitionService.stop();
+
     interviewOrchestrator.transition(
       InterviewState.EVALUATING
     );
@@ -90,62 +134,70 @@ class InterviewSessionService {
         "/api/interview/answer",
         {
           method: "POST",
-
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
-
           body: JSON.stringify({
-            interviewId,
-
+            interviewId:
+              this.interviewId,
             answer,
           }),
         }
       );
 
-      if (!response.ok) {
-        throw new Error(`Server returned status ${response.status}`);
+      const data: AnswerResponse =
+        await response.json();
+
+      if (!data.success) {
+        throw new Error(
+          "Answer submission failed."
+        );
       }
 
-      const data = await response.json();
+      if (data.evaluation) {
+        behaviorScoreService.updateEvaluation(
+          data.evaluation.correctnessScore,
+          data.evaluation.communicationScore
+        );
+      }
 
       if (data.completed) {
-        return this.finish(interviewId);
+        return this.finish();
       }
 
-      // Update counter: first question asked should not increment, subsequent should
-      const currentStoreQuestion = useInterviewStore.getState().question;
-      if (currentStoreQuestion) {
-        useInterviewStore.getState().nextQuestion();
+      if (data.currentQuestion !== undefined) {
+        useInterviewStore.getState().setQuestionNumber(data.currentQuestion);
       }
-      useInterviewStore.getState().setQuestion(data.question);
+      if (data.totalQuestions !== undefined) {
+        useInterviewStore.getState().setTotalQuestions(data.totalQuestions);
+      }
+
+      const store = useInterviewStore.getState();
+      store.setQuestion(data.question);
+      store.setTopic(data.topic);
+      store.setDifficulty(data.difficulty);
+      store.setFollowUp(data.followUp);
+
+      // Clear speech segments and transcript for the next question
+      store.clearSpeechSegments();
+      store.clearTranscript();
 
       await aiSpeechService.speak(
         data.question
       );
 
       speechRecognitionService.start(
-        async (nextAnswer) => {
-          await this.submitAnswer(
-            interviewId,
-            nextAnswer
-          );
-        }
+        this.onSpeechSegmentComplete
       );
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error(err);
 
-      interviewOrchestrator.transition(
-        InterviewState.IDLE
-      );
-
-      await aiSpeechService.speak(
-        "I'm sorry, something went wrong. Please try again."
-      );
+      this.running = false;
     }
-  }
+  };
 
-  async finish(interviewId: string) {
+  async finish() {
     interviewOrchestrator.transition(
       InterviewState.COMPLETED
     );
@@ -153,35 +205,34 @@ class InterviewSessionService {
     speechRecognitionService.stop();
 
     await aiSpeechService.speak(
-      "Thank you. That concludes today's interview. Your report is now being generated."
+      "Thank you. Your interview has been completed."
     );
 
-    try {
-      const response = await fetch(
-        "/api/interview/finish",
-        {
-          method: "POST",
+    await fetch("/api/interview/finish", {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json",
+      },
+      body: JSON.stringify({
+        interviewId:
+          this.interviewId,
+      }),
+    });
 
-          headers: {
-            "Content-Type": "application/json",
-          },
+    this.running = false;
+  }
 
-          body: JSON.stringify({
-            interviewId,
-          }),
-        }
-      );
+  stop() {
+    speechRecognitionService.stop();
 
-      if (!response.ok) {
-        throw new Error(`Server returned status ${response.status}`);
-      }
-    } catch (err) {
-      console.error("Failed to generate report:", err);
-    }
+    aiSpeechService.stop();
 
-    console.log(
-      "Interview Completed"
-    );
+    this.running = false;
+  }
+
+  isRunning() {
+    return this.running;
   }
 }
 

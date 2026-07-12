@@ -7,6 +7,10 @@ import behaviorEngine from "@/services/behavior/behavior-engine.service";
 import { useRef } from "react";
 import behaviorIntegrityService from "@/services/integrity/behavior-integrity.service";
 import voiceEngine from "@/services/voice/voice-engine.service";
+import { useBehaviorStore } from "@/stores/behavior-store";
+import { useVoiceStore } from "@/stores/voice-store";
+import behaviorScoreService from "@/services/behavior/behavior-score.service";
+import { useBehaviorScoreStore } from "@/stores/behavior-score-store";
 
 interface BehaviorAnalyzerProps {
   interviewId: string;
@@ -59,6 +63,15 @@ export default function BehaviorAnalyzer({ interviewId }: BehaviorAnalyzerProps)
               timestamp: now,
             });
 
+            useBehaviorStore.getState().setBehavior(state);
+            useVoiceStore.getState().setVoice(voiceEngine.getState());
+
+            const scores = behaviorScoreService.calculate(
+              state,
+              voiceEngine.getState()
+            );
+            useBehaviorScoreStore.getState().setScores(scores);
+
             const events = behaviorIntegrityService.analyze(state);
 
             const second = Math.floor(performance.now() / 1000);
@@ -79,9 +92,9 @@ export default function BehaviorAnalyzer({ interviewId }: BehaviorAnalyzerProps)
 
                   second,
 
-                  attention: state.attention,
+                  attention: scores.attention,
 
-                  confidence: state.confidence,
+                  confidence: scores.confidence,
 
                   eyeContact: state.eyeContact,
 
