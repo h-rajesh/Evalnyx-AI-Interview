@@ -15,11 +15,23 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
       allowDangerousEmailAccountLinking: true,
+      authorization: {
+        params: {
+          prompt: "select_account",
+          access_type: "offline",
+          response_type: "code",
+        },
+      },
     }),
     GitHubProvider({
       clientId: process.env.GITHUB_CLIENT_ID as string,
       clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
       allowDangerousEmailAccountLinking: true,
+      authorization: {
+        params: {
+          prompt: "consent",
+        },
+      },
     }),
     CredentialsProvider({
       name: "Credentials",
@@ -76,40 +88,37 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    /**
-     * JWT callback — only queries the DB on the initial sign-in/sign-up trigger.
-     * Subsequent token refreshes reuse the values already stored in the JWT,
-     * avoiding a DB round-trip on every session check.
-     * OAuth providers (Google, GitHub) have emailVerified set by PrismaAdapter
-     * at account-creation time, so they are never redirected to the verify notice.
-     */
-    async jwt({ token, user, trigger }) {
-      // On initial sign-in or when explicitly triggered, fetch fresh data from DB
-      if (trigger === "signIn" || trigger === "signUp" || user) {
-        const email = user?.email ?? token.email;
-        if (!email) return token;
+    async jwt({ token, user }) {
+      const email = user?.email ?? token.email;
+      if (!email) return token;
 
-        const dbUser = await prisma.user.findUnique({
-          where: { email },
-        });
+      const dbUser = await prisma.user.findUnique({
+        where: { email },
+      });
 
-        if (dbUser) {
-          token.id = dbUser.id;
-          token.name = dbUser.name;
-          token.email = dbUser.email;
-          token.emailVerified = dbUser.emailVerified;
-        }
+      if (!dbUser) {
+        return {} as any;
       }
+
+      token.id = dbUser.id;
+      token.name = dbUser.name;
+      token.email = dbUser.email;
+      token.emailVerified = dbUser.emailVerified;
 
       return token;
     },
 
     async session({ session, token }) {
-      if (session.user) {
+      if (session.user && token.id) {
         session.user.id = token.id as string;
         session.user.name = token.name as string;
         session.user.email = token.email as string;
         session.user.emailVerified = token.emailVerified as Date | null;
+      } else {
+        return {
+          ...session,
+          user: undefined,
+        } as any;
       }
 
       return session;

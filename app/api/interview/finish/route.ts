@@ -43,12 +43,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to finalize the interview session and generate report.",
+        message: error?.message || "Failed to finalize the interview session and generate report.",
+        stack: error?.stack,
       },
       {
         status: 500,

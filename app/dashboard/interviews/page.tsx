@@ -22,13 +22,134 @@ import {
   StatusBadge,
 } from "@/components/features/InterviewBadges";
 
-import { recentInterviews } from "@/lib/mock-data";
+import { useInterviewHistory } from "@/hooks/useInterviewHistory";
+
+interface InterviewCardProps {
+  interview: {
+    id: string;
+    jobRole: string;
+    interviewType: string;
+    difficulty: string;
+    duration: number;
+    status: string;
+    createdAt: string;
+    report?: {
+      overallScore: number;
+    } | null;
+  };
+}
+
+function mapStatus(dbStatus: string): "completed" | "in-progress" | "scheduled" {
+  switch (dbStatus) {
+    case "COMPLETED":
+      return "completed";
+    case "IN_PROGRESS":
+      return "in-progress";
+    default:
+      return "scheduled";
+  }
+}
+
+function InterviewCard({ interview }: InterviewCardProps) {
+  const formattedDate = new Date(interview.createdAt).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const status = mapStatus(interview.status);
+
+  return (
+    <Card className="border-border/60 shadow-soft transition-shadow hover:shadow-elevated">
+      <CardContent className="space-y-4 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="truncate text-base font-semibold">
+              {interview.jobRole}
+            </h3>
+
+            <p className="text-xs text-muted-foreground">
+              {formattedDate}
+            </p>
+          </div>
+
+          <StatusBadge status={status} />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="secondary" className="rounded-full">
+            {interview.interviewType}
+          </Badge>
+
+          <Badge variant="secondary" className="rounded-full">
+            {interview.difficulty}
+          </Badge>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-border/60 pt-4">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="h-3.5 w-3.5" />
+            {interview.duration} min
+          </span>
+
+          {status === "completed" ? (
+            <Button asChild size="sm" variant="ghost" className="rounded-lg">
+              <Link href={`/report/${interview.id}`}>
+                <span className="flex items-center gap-2">
+                  View Report
+                  <ScoreBadge score={interview.report?.overallScore ?? 0} />
+                </span>
+              </Link>
+            </Button>
+          ) : (
+            <Button asChild size="sm" className="rounded-lg">
+              <Link href={`/interview/${interview.id}`}>
+                Start
+              </Link>
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function HistorySkeleton() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Card key={i} className="border-border/60 shadow-soft animate-pulse">
+          <CardContent className="space-y-4 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-2 w-2/3">
+                <div className="h-4 bg-muted rounded w-3/4" />
+                <div className="h-3 bg-muted rounded w-1/2" />
+              </div>
+              <div className="h-6 bg-muted rounded w-20" />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <div className="h-5 bg-muted rounded w-16" />
+              <div className="h-5 bg-muted rounded w-16" />
+            </div>
+            <div className="flex items-center justify-between border-t border-border/60 pt-4">
+              <div className="h-4 bg-muted rounded w-16" />
+              <div className="h-8 bg-muted rounded w-24" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
 
 export default function InterviewsPage() {
   const [query, setQuery] = useState("");
+  const { data, isLoading } = useInterviewHistory();
 
-  const filtered = recentInterviews.filter((interview) =>
-    `${interview.role} ${interview.type} ${interview.difficulty}`
+  const interviews = data?.interviews ?? [];
+
+  const filtered = interviews.filter((interview: any) =>
+    `${interview.jobRole} ${interview.interviewType} ${interview.difficulty}`
       .toLowerCase()
       .includes(query.toLowerCase())
   );
@@ -62,7 +183,9 @@ export default function InterviewsPage() {
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <HistorySkeleton />
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon={History}
           title="No interviews found"
@@ -77,83 +200,11 @@ export default function InterviewsPage() {
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          {filtered.map((interview) => (
-            <Card
+          {filtered.map((interview: any) => (
+            <InterviewCard
               key={interview.id}
-              className="border-border/60 shadow-soft transition-shadow hover:shadow-elevated"
-            >
-              <CardContent className="space-y-4 p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-base font-semibold">
-                      {interview.role}
-                    </h3>
-
-                    <p className="text-xs text-muted-foreground">
-                      {interview.date}
-                    </p>
-                  </div>
-
-                  <StatusBadge status={interview.status} />
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Badge
-                    variant="secondary"
-                    className="rounded-full"
-                  >
-                    {interview.type}
-                  </Badge>
-
-                  <Badge
-                    variant="secondary"
-                    className="rounded-full"
-                  >
-                    {interview.level}
-                  </Badge>
-
-                  <Badge
-                    variant="secondary"
-                    className="rounded-full"
-                  >
-                    {interview.difficulty}
-                  </Badge>
-                </div>
-
-                <div className="flex items-center justify-between border-t border-border/60 pt-4">
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" />
-                    {interview.durationMin} min
-                  </span>
-
-                  {interview.status === "completed" ? (
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="ghost"
-                      className="rounded-lg"
-                    >
-                      <Link href={`/report/${interview.id}`}>
-                        <span className="flex items-center gap-2">
-                          View Report
-                          <ScoreBadge score={interview.score} />
-                        </span>
-                      </Link>
-                    </Button>
-                  ) : (
-                    <Button
-                      asChild
-                      size="sm"
-                      className="rounded-lg"
-                    >
-                      <Link href={`/interview/${interview.id}`}>
-                        Start
-                      </Link>
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+              interview={interview}
+            />
           ))}
         </div>
       )}

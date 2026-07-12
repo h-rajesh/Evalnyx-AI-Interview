@@ -1,6 +1,4 @@
-import behaviorEngine from "./behavior/behavior-engine.service";
-import voiceEngine from "./voice/voice-engine.service";
-import behaviorScoreService from "./behavior/behavior-score.service";
+import realtimeAnalytics from "./analytics/realtime-analytics.service";
 
 class SnapshotService {
   private timer: NodeJS.Timeout | null = null;
@@ -12,13 +10,11 @@ class SnapshotService {
 
     this.timer = setInterval(async () => {
       try {
-        const behavior = behaviorEngine.getState();
-        const voice = voiceEngine.getState();
-        const scores = behaviorScoreService.calculate(behavior, voice);
-
         const second = Math.floor(
           (Date.now() - startedAt) / 1000
         );
+
+        const metrics = realtimeAnalytics.getSnapshot();
 
         await fetch("/api/interview/behavior", {
           method: "POST",
@@ -28,14 +24,7 @@ class SnapshotService {
           body: JSON.stringify({
             interviewId,
             second,
-            attention: scores.attention,
-            confidence: scores.confidence,
-            eyeContact: behavior.eyeContact,
-            headDirection: behavior.headDirection,
-            emotion: "UNKNOWN",
-            blinkRate: behavior.blinkRate,
-            speaking: voice.speaking,
-            voiceVolume: voice.averageVolume,
+            ...metrics,
           }),
         });
       } catch (err) {

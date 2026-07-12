@@ -34,5 +34,17 @@ export const useVoiceStore = create<VoiceStore>((set) => ({
 
   lastSpeechEnded: null,
 
+  pauseCount: 0,
+
+  longestPause: 0,
+
+  currentPause: 0,
+
+  speechSegments: 0,
+
+  speakingRatio: 0,
+
+  energy: 100,
+
   setVoice: (state) => set(state),
 }));

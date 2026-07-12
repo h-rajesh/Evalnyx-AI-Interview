@@ -11,6 +11,7 @@ import { useBehaviorStore } from "@/stores/behavior-store";
 import { useVoiceStore } from "@/stores/voice-store";
 import behaviorScoreService from "@/services/behavior/behavior-score.service";
 import { useBehaviorScoreStore } from "@/stores/behavior-score-store";
+import realtimeAnalytics from "@/services/analytics/realtime-analytics.service";
 
 interface BehaviorAnalyzerProps {
   interviewId: string;
@@ -19,7 +20,6 @@ interface BehaviorAnalyzerProps {
 export default function BehaviorAnalyzer({ interviewId }: BehaviorAnalyzerProps) {
   const [facePresent, setFacePresent] = useState(false);
   const [behavior, setBehavior] = useState<any>(null);
-  const lastSavedSecond = useRef(-1);
 
   useEffect(() => {
     let animationFrame: number;
@@ -72,44 +72,16 @@ export default function BehaviorAnalyzer({ interviewId }: BehaviorAnalyzerProps)
             );
             useBehaviorScoreStore.getState().setScores(scores);
 
+            realtimeAnalytics.updateBehavior({
+              attention: scores.attention,
+              eyeContact: state.eyeContact,
+              confidence: scores.confidence,
+              emotion: state.emotion ?? "NEUTRAL",
+              blinkRate: state.blinkRate,
+              headDirection: state.headDirection ?? "CENTER",
+            });
+
             const events = behaviorIntegrityService.analyze(state);
-
-            const second = Math.floor(performance.now() / 1000);
-            const voice = voiceEngine.getState();
-
-            if (second !== lastSavedSecond.current) {
-              lastSavedSecond.current = second;
-
-              fetch("/api/interview/behavior", {
-                method: "POST",
-
-                headers: {
-                  "Content-Type": "application/json",
-                },
-
-                body: JSON.stringify({
-                  interviewId,
-
-                  second,
-
-                  attention: scores.attention,
-
-                  confidence: scores.confidence,
-
-                  eyeContact: state.eyeContact,
-
-                  headDirection: state.headDirection,
-
-                  emotion: state.emotion,
-
-                  blinkRate: state.blinkRate,
-
-                  speaking: voice.speaking,
-
-                  voiceVolume: voice.averageVolume,
-                }),
-              }).catch(console.error);
-            }
 
             setFacePresent(state.hasFace);
             setBehavior(state);

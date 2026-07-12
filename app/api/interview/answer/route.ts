@@ -10,6 +10,7 @@ import interviewEvaluationService from "@/services/interview-evaluation.service"
 import InterviewAIService from "@/services/interview-ai.service";
 import timelineService from "@/services/timeline/timeline.service";
 import { TimelineEvents } from "@/constants/timeline-events";
+import behaviorScoreService from "@/services/behavior/behavior-score.service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
       latestAnswer: answer,
     });
 
-    const ai = await InterviewAIService.process(prompt);
+    const ai = await InterviewAIService.process(prompt, context.messages);
     const evaluation = ai.evaluation;
     const nextQuestion = ai.nextQuestion;
 
@@ -93,6 +94,12 @@ export async function POST(req: NextRequest) {
       weaknesses: evaluation.weaknesses,
       feedback: evaluation.feedback,
     });
+
+    // After AI evaluation is available
+    behaviorScoreService.updateEvaluation(
+      evaluation.correctnessScore,
+      evaluation.communicationScore
+    );
 
     await timelineService.create({
       interviewId,

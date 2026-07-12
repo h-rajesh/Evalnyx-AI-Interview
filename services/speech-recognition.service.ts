@@ -13,6 +13,8 @@ class SpeechRecognitionService {
 
   private listening = false;
 
+  private isMutedForAISpeaking = false;
+
   private answerCallback:
     | ((answer: string) => Promise<void>)
     | null = null;
@@ -40,6 +42,29 @@ class SpeechRecognitionService {
     this.recognition.interimResults = true;
 
     this.registerEvents();
+
+    // Mute speech recognition while AI is speaking
+    interviewOrchestrator.subscribe((state) => {
+      if (state === InterviewState.AI_SPEAKING) {
+        if (this.listening && this.recognition) {
+          console.log("Muting speech recognition while AI is speaking...");
+          this.isMutedForAISpeaking = true;
+          this.recognition.stop();
+        }
+      } else if (state === InterviewState.LISTENING || state === InterviewState.USER_SPEAKING) {
+        if (this.isMutedForAISpeaking) {
+          this.isMutedForAISpeaking = false;
+          if (!this.listening && this.answerCallback && this.recognition) {
+            console.log("Resuming speech recognition...");
+            try {
+              this.recognition.start();
+            } catch (err) {
+              console.warn("Failed to resume speech recognition:", err);
+            }
+          }
+        }
+      }
+    });
   }
 
   private registerEvents() {
@@ -56,7 +81,7 @@ class SpeechRecognitionService {
       console.log("🛑 Recognition stopped");
 
       // Auto-restart if we still have an active callback
-      if (this.answerCallback) {
+      if (this.answerCallback && !this.isMutedForAISpeaking) {
         console.log("Speech Recognition: auto-restarting...");
         try {
           this.recognition.start();
@@ -173,6 +198,7 @@ class SpeechRecognitionService {
   ) {
     if (!this.recognition) return;
 
+    this.isMutedForAISpeaking = false;
     this.answerCallback = callback;
 
     this.transcript = "";
@@ -199,6 +225,7 @@ class SpeechRecognitionService {
   stop() {
     if (!this.recognition) return;
 
+    this.isMutedForAISpeaking = false;
     this.answerCallback = null;
     this.recognition.stop();
   }

@@ -147,7 +147,25 @@ export default function InterviewRoom() {
   const submitAnswer = async () => {
     if (!answer.trim()) return;
     setSubmittedAnswer(answer.trim());
-    await interviewSession.submitAnswer(answer.trim());
+    try {
+      await interviewSession.submitAnswer(answer.trim());
+      
+      const storeState = useInterviewStore.getState().state;
+      if (storeState === InterviewState.COMPLETED) {
+        setIsFinalizing(true);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`completed_interview_${id}`, "true");
+        }
+        snapshotService.stop();
+        aiSpeechService.stop();
+        speechRecognitionService.stop();
+        router.replace(`/report/${id === "new" ? "int_001" : id}`);
+      }
+    } catch (err: any) {
+      console.error("Answer submission or finalization failed:", err);
+      setFinalizeError(err.message || "Failed to finalize the interview session and generate report.");
+      setIsFinalizing(true);
+    }
   };
 
   const editAnswer = () => {
@@ -185,8 +203,16 @@ export default function InterviewRoom() {
   }, [id, router]);
 
   const [isStarted, setIsStarted] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(true);
   const [startError, setStartError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (state === InterviewState.COMPLETED) {
+      setIsFinalizing(true);
+    }
+  }, [state]);
   const timer = useTimer(isStarted);
 
   const [micOn, setMicOn] = useState(true);
@@ -257,16 +283,24 @@ export default function InterviewRoom() {
 
 
 
-  const endInterview = () => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(`completed_interview_${id}`, "true");
+  const endInterview = async () => {
+    setIsFinalizing(true);
+    setFinalizeError(null);
+    try {
+      snapshotService.stop();
+      aiSpeechService.stop();
+      speechRecognitionService.stop();
+      
+      await interviewSession.finish();
+      
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`completed_interview_${id}`, "true");
+      }
+      router.replace(`/report/${id === "new" ? "int_001" : id}`);
+    } catch (err: any) {
+      console.error("Failed to end interview:", err);
+      setFinalizeError(err.message || "Failed to finalize the interview session and generate report.");
     }
-    snapshotService.stop();
-    aiSpeechService.stop();
-    speechRecognitionService.stop();
-    router.replace(
-      `/report/${id === "new" ? "int_001" : id}`
-    );
   };
 
   if (!isStarted) {
@@ -466,6 +500,75 @@ export default function InterviewRoom() {
             </div>
           </div>
         </main>
+      </div>
+    );
+  }
+
+  if (isFinalizing) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/85 backdrop-blur-md p-6">
+        <div className="w-full max-w-md text-center space-y-6">
+          <div className="relative flex justify-center">
+            <motion.div
+              className="h-20 w-20 rounded-full border-4 border-primary/20 border-t-primary"
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Sparkles className="h-8 w-8 text-primary animate-pulse" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold tracking-tight">Generating Interview Report</h2>
+            <p className="text-sm text-muted-foreground">
+              Please don't close this window. Our AI is analyzing your performance, coding patterns, communication style, and generating your custom learning path.
+            </p>
+          </div>
+
+          <div className="space-y-3 rounded-2xl bg-muted/40 p-4 border border-border/50 text-left text-xs font-medium">
+            {[
+              { label: "Analyzing response content & code correctness", active: true },
+              { label: "Evaluating confidence and behavioral snapshot metrics", active: true },
+              { label: "Generating custom learning roadmap & career advice", active: true },
+            ].map((step, idx) => (
+              <div key={idx} className="flex items-center gap-2.5 text-muted-foreground">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold">
+                  {idx + 1}
+                </span>
+                <span className="text-foreground/90">{step.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {finalizeError && (
+            <div className="rounded-xl bg-destructive/10 p-4 text-xs text-destructive border border-destructive/20 space-y-3 text-center">
+              <p className="font-semibold">{finalizeError}</p>
+              <div className="flex justify-center gap-3">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="rounded-lg border-destructive/30 hover:bg-destructive/5 text-destructive hover:text-destructive"
+                  onClick={endInterview}
+                >
+                  Retry finalization
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  className="rounded-lg"
+                  onClick={() => {
+                    setIsFinalizing(false);
+                    setFinalizeError(null);
+                    router.push("/dashboard");
+                  }}
+                >
+                  Go to Dashboard
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }

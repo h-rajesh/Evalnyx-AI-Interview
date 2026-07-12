@@ -71,11 +71,37 @@ function MediaController({
   const room = useRoomContext();
 
   useEffect(() => {
-    room.localParticipant.setCameraEnabled(cameraOn);
+    async function updateCamera() {
+      try {
+        await room.localParticipant.setCameraEnabled(cameraOn);
+
+        console.log(
+          "Camera:",
+          cameraOn ? "Enabled" : "Disabled"
+        );
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    updateCamera();
   }, [cameraOn, room]);
 
   useEffect(() => {
-    room.localParticipant.setMicrophoneEnabled(micOn);
+    async function updateMic() {
+      try {
+        await room.localParticipant.setMicrophoneEnabled(micOn);
+
+        console.log(
+          "Microphone:",
+          micOn ? "Enabled" : "Disabled"
+        );
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    updateMic();
   }, [micOn, room]);
 
   return null;

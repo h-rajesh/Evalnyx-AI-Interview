@@ -208,17 +208,25 @@ class InterviewSessionService {
       "Thank you. Your interview has been completed."
     );
 
-    await fetch("/api/interview/finish", {
+    const response = await fetch("/api/interview/finish", {
       method: "POST",
       headers: {
-        "Content-Type":
-          "application/json",
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        interviewId:
-          this.interviewId,
+        interviewId: this.interviewId,
       }),
     });
+
+    if (!response.ok) {
+      const text = await response.text();
+      let msg = "Failed to finalize the interview session.";
+      try {
+        const parsed = JSON.parse(text);
+        msg = parsed.message || msg;
+      } catch {}
+      throw new Error(msg);
+    }
 
     this.running = false;
   }

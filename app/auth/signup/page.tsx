@@ -7,6 +7,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { User, Mail, Lock } from "lucide-react";
+import { useEffect } from "react";
+
+import { useSession } from "next-auth/react";
 
 import { AuthShell } from "@/components/features/AuthShell";
 import { Button } from "@/components/ui/button";
@@ -30,6 +33,13 @@ type FormValues = z.infer<typeof schema>;
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { status } = useSession();
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace("/dashboard");
+    }
+  }, [status, router]);
 
   const {
     register,

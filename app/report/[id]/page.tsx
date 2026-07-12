@@ -67,6 +67,63 @@ export default function ReportPage() {
     );
   }
 
+  const snapshots = report.interview?.behaviorSnapshots || [];
+  const evaluations = report.interview?.evaluations || [];
+
+  // 1. Average Speaking Speed (WPM)
+  const totalWords = evaluations.reduce((sum: number, e: any) => sum + (e.answer || "").split(/\s+/).filter(Boolean).length, 0);
+  const speakingSeconds = snapshots.filter((s: any) => s.speaking).length;
+  const speakingMinutes = speakingSeconds / 60;
+  const speakingSpeed = speakingMinutes > 0 ? Math.round(totalWords / speakingMinutes) : 130;
+
+  // 2. Filler Words
+  const countFillers = (text: string) => {
+    const fillers = ["um", "uh", "like", "actually", "basically", "you know", "kind of", "sort of", "i mean"];
+    const lower = (text || "").toLowerCase();
+    let count = 0;
+    fillers.forEach(word => {
+      const regex = new RegExp(`\\b${word}\\b`, "g");
+      const matches = lower.match(regex);
+      if (matches) count += matches.length;
+    });
+    return count;
+  };
+  const fillerCount = evaluations.reduce((sum: number, e: any) => sum + countFillers(e.answer), 0);
+
+  // 3. Eye Contact
+  const avgEyeContact = snapshots.length > 0
+    ? Math.round(snapshots.reduce((sum: number, s: any) => sum + s.eyeContact, 0) / snapshots.length)
+    : 90;
+
+  // 4. Pauses & Longest Pause
+  let pauseCount = 0;
+  let longestPause = 0;
+  let currentPause = 0;
+  let everSpoke = false;
+  snapshots.forEach((s: any) => {
+    if (s.speaking) {
+      everSpoke = true;
+      currentPause = 0;
+    } else if (everSpoke) {
+      if (currentPause === 0) {
+        pauseCount++;
+      }
+      currentPause++;
+      longestPause = Math.max(longestPause, currentPause);
+    }
+  });
+
+  // 5. Speaking Ratio
+  const speakingRatio = snapshots.length > 0
+    ? Math.round((snapshots.filter((s: any) => s.speaking).length / snapshots.length) * 100)
+    : 70;
+
+  // 6. Voice Energy
+  const avgVolume = snapshots.length > 0
+    ? snapshots.reduce((sum: number, s: any) => sum + s.voiceVolume, 0) / snapshots.length
+    : 0.25;
+  const voiceEnergy = Math.round(Math.min(100, avgVolume * 100));
+
   const metrics = [
     {
       label: "Technical",
@@ -87,32 +144,32 @@ export default function ReportPage() {
       icon: Sparkles,
     },
     {
-      label: "Grammar",
-      value: reportData.grammar,
+      label: "Speaking Ratio",
+      value: speakingRatio,
       suffix: "%",
-      icon: SpellCheck,
+      icon: Activity,
     },
     {
       label: "Eye Contact",
-      value: reportData.eyeContact,
+      value: avgEyeContact,
       suffix: "%",
       icon: Eye,
     },
     {
-      label: "Posture",
-      value: reportData.posture,
+      label: "Voice Energy",
+      value: voiceEnergy,
       suffix: "%",
       icon: Activity,
     },
     {
       label: "Speaking Speed",
-      value: reportData.speakingSpeed,
+      value: speakingSpeed,
       suffix: " wpm",
       icon: Activity,
     },
     {
       label: "Filler Words",
-      value: reportData.fillerWords,
+      value: fillerCount,
       suffix: "",
       icon: MessageSquareWarning,
     },
@@ -265,6 +322,28 @@ export default function ReportPage() {
               </Card>
             </motion.div>
           ))}
+        </div>
+
+        {/* Additional Voice Insights */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Card className="border-border/60 shadow-soft">
+            <CardContent className="p-5 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Longest Pause</p>
+                <p className="mt-2 font-display text-2xl font-bold">{longestPause}s</p>
+              </div>
+              <Activity className="h-6 w-6 text-primary opacity-85" />
+            </CardContent>
+          </Card>
+          <Card className="border-border/60 shadow-soft">
+            <CardContent className="p-5 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Number of Pauses</p>
+                <p className="mt-2 font-display text-2xl font-bold">{pauseCount}</p>
+              </div>
+              <MessageSquareWarning className="h-6 w-6 text-primary opacity-85" />
+            </CardContent>
+          </Card>
         </div>
 
         <QuestionReview

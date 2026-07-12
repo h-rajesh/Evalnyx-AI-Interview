@@ -1,5 +1,6 @@
 import { Interview, ParsedResume, User } from "@/app/generated/prisma/client";
 import { InterviewMessage } from "@/app/generated/prisma/client";
+import questionMemoryService from "./question-memory.service";
 
 class PromptBuilderService {
   buildPrompt({
@@ -23,6 +24,15 @@ class PromptBuilderService {
           `${m.role === "USER" ? "Candidate" : "Interviewer"}: ${m.content}`
       )
       .join("\n");
+
+    const previousQuestions =
+      questionMemoryService.buildQuestionHistory(
+        messages
+      );
+
+    const completedTopics = Array.isArray(interview.completedTopics)
+      ? (interview.completedTopics as string[]).join(", ")
+      : "";
 
     const isStartOfInterview = messages.length === 0 && !latestQuestion && !latestAnswer;
     const startSalt = isStartOfInterview
@@ -129,6 +139,28 @@ LATEST ANSWER
 ==============================
 
 ${latestAnswer}
+
+==============================
+PREVIOUS QUESTIONS
+==============================
+
+${previousQuestions}
+
+==============================
+COMPLETED TOPICS
+==============================
+
+${completedTopics}
+
+==============================
+IMPORTANT RULES
+==============================
+
+1. Never repeat any previous question.
+2. Never ask the same concept twice.
+3. If a topic is finished, move to another topic.
+4. Follow interview progression from easy to difficult.
+5. Ask only one question at a time.
 
 ==============================
 YOUR INSTRUCTIONS

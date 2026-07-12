@@ -67,6 +67,18 @@ class InterviewService {
     return InterviewRepository.findByUser(userId);
   }
 
+  async getHistory() {
+  return prisma.interview.findMany({
+    orderBy: {
+      createdAt: "desc",
+    },
+
+    include: {
+      report: true,
+    },
+  });
+}
+
   async getInterview(id: string) {
     const interview = await InterviewRepository.findById(id);
     if (!interview) {

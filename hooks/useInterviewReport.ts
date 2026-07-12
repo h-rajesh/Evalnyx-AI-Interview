@@ -34,7 +34,7 @@ export interface InterviewReportResponse {
 
       evaluations: any[];
 
-      snapshots: any[];
+      behaviorSnapshots: any[];
 
       integrityEvents: any[];
 

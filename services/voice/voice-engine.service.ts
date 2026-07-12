@@ -24,6 +24,18 @@ export interface VoiceState {
   lastSpeechStarted: number | null;
 
   lastSpeechEnded: number | null;
+
+  pauseCount: number;
+
+longestPause: number;
+
+currentPause: number;
+
+speechSegments: number;
+
+speakingRatio: number;
+
+energy: number;
 }
 
 class VoiceEngine {
@@ -53,6 +65,18 @@ class VoiceEngine {
     lastSpeechStarted: null,
 
     lastSpeechEnded: null,
+
+    pauseCount: 0,
+
+    longestPause: 0,
+
+    currentPause: 0,
+
+    speechSegments: 0,
+
+    speakingRatio: 0,
+
+    energy: 100,
   };
 
   private interviewStarted = Date.now();
@@ -78,6 +102,12 @@ class VoiceEngine {
       speaking: false,
       lastSpeechStarted: null,
       lastSpeechEnded: null,
+      pauseCount: 0,
+      longestPause: 0,
+      currentPause: 0,
+      speechSegments: 0,
+      speakingRatio: 0,
+      energy: 100,
     };
     this.interviewStarted = Date.now();
     this.questionFinishedAt = null;
@@ -159,6 +189,7 @@ class VoiceEngine {
     speaking: boolean,
     volume: number
   ) {
+    const wasSpeaking = this.state.speaking;
     this.state.speaking = speaking;
 
     this.state.currentVolume = volume;
@@ -176,32 +207,56 @@ class VoiceEngine {
       );
 
     if (speaking) {
-      this.state.speakingTime++;
+      if (!wasSpeaking) {
+        this.state.speechSegments++;
 
-      if (
-        this.state.lastSpeechStarted ===
-        null
-      ) {
-        this.state.lastSpeechStarted =
-          Date.now();
+        this.state.lastSpeechStarted = Date.now();
 
-        if (
-          this.questionFinishedAt
-        ) {
+        if (this.questionFinishedAt) {
           this.state.responseDelay =
-            Date.now() -
-            this.questionFinishedAt;
+            Date.now() - this.questionFinishedAt;
         }
       }
+
+      this.state.speakingTime++;
+
+      this.state.currentPause = 0;
     } else {
+      if (wasSpeaking) {
+        this.state.pauseCount++;
+      }
+
       this.state.silenceTime++;
 
-      this.state.lastSpeechEnded =
-        Date.now();
+      this.state.currentPause++;
 
-      this.state.lastSpeechStarted =
-        null;
+      this.state.longestPause = Math.max(
+        this.state.longestPause,
+        this.state.currentPause
+      );
+
+      this.state.lastSpeechEnded = Date.now();
     }
+
+    // Speaking Ratio
+    const total =
+      this.state.speakingTime +
+      this.state.silenceTime;
+
+    this.state.speakingRatio =
+      total === 0
+        ? 0
+        : Math.round(
+            (this.state.speakingTime / total) * 100
+          );
+
+    // Voice Energy
+    this.state.energy = Math.round(
+      Math.min(
+        100,
+        this.state.averageVolume * 100
+      )
+    );
 
     this.calculateConfidence();
 
@@ -216,19 +271,37 @@ class VoiceEngine {
   private calculateConfidence(activeFillerCount?: number) {
     let score = 100;
 
-    if (this.state.wordsPerMinute < 80)
-      score -= 20;
-
-    if (this.state.wordsPerMinute > 180)
+    if (this.state.wordsPerMinute < 90)
       score -= 10;
 
+    if (this.state.wordsPerMinute > 180)
+      score -= 8;
+
     const currentFillers = activeFillerCount !== undefined ? activeFillerCount : this.state.fillerCount;
-    score -= currentFillers * 2;
+    score -= Math.min(
+      currentFillers * 2,
+      20
+    );
 
     if (this.state.responseDelay > 5000)
-      score -= 15;
+      score -= 10;
 
-    this.state.confidence = Math.max(0, score);
+    if (this.state.pauseCount > 8)
+      score -= 8;
+
+    if (this.state.longestPause > 5)
+      score -= 8;
+
+    if (this.state.averageVolume < 0.2)
+      score -= 6;
+
+    if (this.state.speakingRatio < 40)
+      score -= 5;
+
+    this.state.confidence = Math.max(
+      0,
+      Math.min(100, Math.round(score))
+    );
   }
 
   getState() {

@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Process prompt via InterviewAIService
-    const ai = await InterviewAIService.process(prompt);
+    const ai = await InterviewAIService.process(prompt, context.messages);
     const nextQuestion = ai.nextQuestion;
 
     // Update Topics

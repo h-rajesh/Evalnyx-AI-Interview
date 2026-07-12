@@ -1,7 +1,8 @@
 import { gemini } from "@/lib/ai/gemini";
+import questionMemoryService from "./question-memory.service";
 
 class InterviewAIService {
-  async process(prompt: string) {
+  async process(prompt: string, messages: { role: string; content: string }[] = []) {
     const response = await gemini.models.generateContent({
       model: "gemini-flash-lite-latest",
       contents: prompt,
@@ -12,16 +13,27 @@ class InterviewAIService {
 
     const raw = response.text ?? "";
 
-    const cleaned = raw
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
+    let cleaned = raw.trim();
+    const jsonStart = cleaned.indexOf('{');
+    const jsonEnd = cleaned.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+      cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+    }
 
     try {
-      return JSON.parse(cleaned);
-    } catch (error) {
+      const parsed = JSON.parse(cleaned);
+
+      if (parsed.nextQuestion?.question && messages.length > 0) {
+        const askedQuestions = questionMemoryService.getAskedQuestions(messages);
+        if (questionMemoryService.hasQuestion(parsed.nextQuestion.question, askedQuestions)) {
+          throw new Error("AI generated a repeated question.");
+        }
+      }
+
+      return parsed;
+    } catch (error: any) {
       console.error("Invalid AI Response:", cleaned);
-      throw new Error("Failed to parse Gemini JSON.");
+      throw error;
     }
   }
 
@@ -36,16 +48,18 @@ class InterviewAIService {
 
     const raw = response.text ?? "";
 
-    const cleaned = raw
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
+    let cleaned = raw.trim();
+    const jsonStart = cleaned.indexOf('{');
+    const jsonEnd = cleaned.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+      cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+    }
 
     try {
       return JSON.parse(cleaned);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Invalid AI Response for Report:", cleaned);
-      throw new Error("Failed to parse Gemini JSON for Report.");
+      throw error;
     }
   }
 }
