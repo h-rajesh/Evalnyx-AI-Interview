@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { MotionDiv } from "@/components/common/Motion";
 import {
@@ -7,8 +9,6 @@ import {
   Clock,
   Activity,
   BarChart3,
-  Upload,
-  FileText,
   ArrowRight,
   Target,
 } from "lucide-react";
@@ -29,16 +29,78 @@ import {
   StatusBadge,
 } from "@/components/features/InterviewBadges";
 
-import {
-  stats,
-  recentInterviews,
-} from "@/lib/mock-data";
+import { useDashboard } from "@/hooks/useDashboard";
 import { DashboardGreeting } from "@/components/features/DashboardGreeting";
 import { DashboardResumeCard } from "@/components/features/DashboardResumeCard";
 
 const statIcons = [Trophy, Target, Clock, Activity];
 
-export default async function DashboardPage() {
+export default function DashboardPage() {
+  const { data, isLoading } = useDashboard();
+  const dashboard = data?.dashboard;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8 animate-pulse">
+        {/* Banner Skeleton */}
+        <div className="h-48 rounded-2xl bg-muted/60" />
+        
+        {/* Stats Grid Skeleton */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-28 rounded-xl bg-muted/60" />
+          ))}
+        </div>
+
+        {/* Charts & Resume Card Skeleton */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="h-[350px] rounded-xl bg-muted/60 lg:col-span-2" />
+          <div className="h-[350px] rounded-xl bg-muted/60" />
+        </div>
+
+        {/* Recent Interviews Skeleton */}
+        <div className="h-[250px] rounded-xl bg-muted/60" />
+      </div>
+    );
+  }
+
+  const recentInterviewsMapped = (dashboard?.recentInterviews || []).slice(0, 4).map((it: any) => {
+    const difficulty = it.difficulty
+      ? it.difficulty.charAt(0).toUpperCase() + it.difficulty.slice(1).toLowerCase()
+      : "";
+    
+    const type = it.interviewType
+      ? it.interviewType.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
+      : "";
+
+    const date = it.createdAt
+      ? new Date(it.createdAt).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
+      : "";
+
+    let status: "completed" | "in-progress" | "scheduled" = "completed";
+    if (it.status === "SCHEDULED" || it.status === "scheduled") {
+      status = "scheduled";
+    } else if (it.status === "IN_PROGRESS" || it.status === "in-progress") {
+      status = "in-progress";
+    }
+
+    const score = it.report?.overallScore ?? it.score ?? 0;
+
+    return {
+      id: it.id,
+      role: it.jobRole || it.title,
+      type,
+      difficulty,
+      date,
+      status,
+      score,
+    };
+  });
+
   return (
     <div className="space-y-8">
       <MotionDiv
@@ -86,13 +148,34 @@ export default async function DashboardPage() {
       </MotionDiv>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((s, i) => (
-          <StatCard
-            key={s.label}
-            {...s}
-            icon={statIcons[i]}
-          />
-        ))}
+        <StatCard
+          label="Interviews Taken"
+          value={dashboard?.interviewCount !== undefined ? `${dashboard.interviewCount}` : "0"}
+          change="+12%"
+          trend="up"
+          icon={statIcons[0]}
+        />
+        <StatCard
+          label="Average Score"
+          value={dashboard?.averageScore !== undefined ? `${dashboard.averageScore}%` : "0%"}
+          change="+5%"
+          trend="up"
+          icon={statIcons[1]}
+        />
+        <StatCard
+          label="Practice Hours"
+          value={dashboard?.practiceHours !== undefined ? `${dashboard.practiceHours}` : "0"}
+          change="+3.2h"
+          trend="up"
+          icon={statIcons[2]}
+        />
+        <StatCard
+          label="Confidence"
+          value="High"
+          change="Improving"
+          trend="up"
+          icon={statIcons[3]}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -111,7 +194,7 @@ export default async function DashboardPage() {
           </CardHeader>
 
           <CardContent>
-            <PerformanceChart />
+            <PerformanceChart data={dashboard?.performance} />
           </CardContent>
         </Card>
 
@@ -139,31 +222,37 @@ export default async function DashboardPage() {
 
         <CardContent className="p-0">
           <div className="divide-y divide-border/60">
-            {recentInterviews.slice(0, 4).map((it) => (
-              <Link
-                key={it.id}
-                href={`/report/${it.id}`}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/40"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">
-                    {it.role}
-                  </p>
+            {recentInterviewsMapped.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground text-sm">
+                No recent interviews yet.
+              </div>
+            ) : (
+              recentInterviewsMapped.map((it: any) => (
+                <Link
+                  key={it.id}
+                  href={`/report/${it.id}`}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/40"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">
+                      {it.role}
+                    </p>
 
-                  <p className="truncate text-xs text-muted-foreground">
-                    {it.type} · {it.difficulty} · {it.date}
-                  </p>
-                </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {it.type} · {it.difficulty} · {it.date}
+                    </p>
+                  </div>
 
-                <div className="flex shrink-0 items-center gap-4">
-                  <StatusBadge status={it.status} />
+                  <div className="flex shrink-0 items-center gap-4">
+                    <StatusBadge status={it.status} />
 
-                  {it.status === "completed" && (
-                    <ScoreBadge score={it.score} />
-                  )}
-                </div>
-              </Link>
-            ))}
+                    {it.status === "completed" && (
+                      <ScoreBadge score={it.score} />
+                    )}
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
         </CardContent>
       </Card>

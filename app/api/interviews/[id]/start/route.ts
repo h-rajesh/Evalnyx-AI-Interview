@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/auth-user";
-import InterviewService from "@/services/interview.service";
+import InterviewService from "@/services/interview-service";
 import LiveKitService from "@/services/livekit.service";
 import { InterviewStatus } from "@/app/generated/prisma/enums";
 

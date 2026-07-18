@@ -9,12 +9,34 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { performanceData } from "@/lib/mock-data";
 
-export function PerformanceChart() {
+export interface PerformancePoint {
+  date: string | Date;
+  score: number;
+  communication?: number;
+}
+
+interface PerformanceChartProps {
+  data?: PerformancePoint[];
+}
+
+export function PerformanceChart({ data }: PerformanceChartProps) {
+  const chartData = (data || []).map((item) => {
+    const dateObj = new Date(item.date);
+    const month = dateObj.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    return {
+      month,
+      score: item.score,
+      communication: item.communication ?? 0,
+    };
+  });
+
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <AreaChart data={performanceData} margin={{ top: 10, right: 8, left: -18, bottom: 0 }}>
+      <AreaChart data={chartData} margin={{ top: 10, right: 8, left: -18, bottom: 0 }}>
         <defs>
           <linearGradient id="scoreFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--color-chart-1)" stopOpacity={0.35} />
@@ -27,7 +49,7 @@ export function PerformanceChart() {
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
         <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} />
-        <YAxis domain={[40, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} />
+        <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} />
         <Tooltip
           contentStyle={{
             background: "var(--color-popover)",

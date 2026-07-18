@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import interviewService from "@/services/interview-service";
+import dashboardService from "@/services/dashboard.service";
 
 export async function GET() {
   try {
-    const interviews = await interviewService.getHistory();
+    const dashboard = await dashboardService.getDashboard();
 
     return NextResponse.json({
       success: true,
-      interviews,
+      dashboard,
     });
   } catch (error) {
     console.error(error);
@@ -15,6 +15,7 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
+        message: "Failed to load dashboard.",
       },
       {
         status: 500,

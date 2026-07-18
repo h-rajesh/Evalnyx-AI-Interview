@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth-user";
-import interviewService from "@/services/interview.service";
+import interviewService from "@/services/interview-service";
 import { CreateInterviewSchema } from "@/validations/interview";
 import { NextRequest, NextResponse } from "next/server";
 

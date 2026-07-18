@@ -1,10 +1,8 @@
-import { gemini } from "@/lib/ai/gemini";
+import aiGateway from "./ai/ai-gateway";
 
 class TopicExtractorService {
   async extract(question: string): Promise<string> {
-    const response = await gemini.models.generateContent({
-      model: "gemini-flash-lite-latest",
-      contents: `
+    const prompt = `
 You are an interview topic classifier.
 
 Return ONLY the main interview topic.
@@ -39,11 +37,11 @@ Question:
 ${question}
 
 Output:
-`,
-    });
+`;
 
-    return response.text?.trim() ?? "General";
+    const result = await aiGateway.generate(prompt, { isJson: false });
+    return result || "General";
   }
 }
 
-export default new TopicExtractorService();
+export default new TopicExtractorService();

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import interviewService from "@/services/interview.service";
+import interviewService from "@/services/interview-service";
 import analyticsEngine from "@/services/analytics/analytics-engine.service";
 import reportGeneratorService from "@/services/report/report-generator.service";
 import { InterviewStatus } from "@/app/generated/prisma/enums";
 import timelineService from "@/services/timeline/timeline.service";
 import { TimelineEvents } from "@/constants/timeline-events";
+import interviewSessionManager from "@/services/interview/interview-session-manager";
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,6 +28,9 @@ export async function POST(req: NextRequest) {
     await interviewService.updateInterview(interviewId, {
       status: InterviewStatus.COMPLETED,
     });
+
+    // Remove session from session manager
+    interviewSessionManager.remove(interviewId);
 
     await timelineService.create({
       interviewId,

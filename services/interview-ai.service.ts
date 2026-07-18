@@ -1,67 +1,23 @@
-import { gemini } from "@/lib/ai/gemini";
+import aiGateway from "./ai/ai-gateway";
 import questionMemoryService from "./question-memory.service";
 
 class InterviewAIService {
   async process(prompt: string, messages: { role: string; content: string }[] = []) {
-    const response = await gemini.models.generateContent({
-      model: "gemini-flash-lite-latest",
-      contents: prompt,
-      config: {
-        temperature: 0.8,
-      },
-    });
+    const parsed = await aiGateway.generate(prompt, { temperature: 0.8, isJson: true });
 
-    const raw = response.text ?? "";
-
-    let cleaned = raw.trim();
-    const jsonStart = cleaned.indexOf('{');
-    const jsonEnd = cleaned.lastIndexOf('}');
-    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-      cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
-    }
-
-    try {
-      const parsed = JSON.parse(cleaned);
-
-      if (parsed.nextQuestion?.question && messages.length > 0) {
-        const askedQuestions = questionMemoryService.getAskedQuestions(messages);
-        if (questionMemoryService.hasQuestion(parsed.nextQuestion.question, askedQuestions)) {
-          throw new Error("AI generated a repeated question.");
-        }
+    if (parsed.nextQuestion?.question && messages.length > 0) {
+      const askedQuestions = questionMemoryService.getAskedQuestions(messages);
+      if (questionMemoryService.hasQuestion(parsed.nextQuestion.question, askedQuestions)) {
+        console.warn("AI generated a repeated question, returning parsed output");
       }
-
-      return parsed;
-    } catch (error: any) {
-      console.error("Invalid AI Response:", cleaned);
-      throw error;
     }
+
+    return parsed;
   }
 
   async generateReport(prompt: string) {
-    const response = await gemini.models.generateContent({
-      model: "gemini-flash-lite-latest",
-      contents: prompt,
-      config: {
-        temperature: 0.8,
-      },
-    });
-
-    const raw = response.text ?? "";
-
-    let cleaned = raw.trim();
-    const jsonStart = cleaned.indexOf('{');
-    const jsonEnd = cleaned.lastIndexOf('}');
-    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-      cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
-    }
-
-    try {
-      return JSON.parse(cleaned);
-    } catch (error: any) {
-      console.error("Invalid AI Response for Report:", cleaned);
-      throw error;
-    }
+    return await aiGateway.generate(prompt, { temperature: 0.8, isJson: true });
   }
 }
 
-export default new InterviewAIService();
+export default new InterviewAIService();

@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth-user";
-import interviewService from "@/services/interview.service";
+import interviewService from "@/services/interview-service";
 import { NextRequest, NextResponse } from "next/server";
 import analyticsEngine from "@/services/analytics/analytics-engine.service";
 import reportGeneratorService from "@/services/report/report-generator.service";
