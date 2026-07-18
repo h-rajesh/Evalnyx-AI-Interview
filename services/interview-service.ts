@@ -17,7 +17,8 @@ import InterviewAIService from "@/services/interview-ai.service";
 import timelineService from "@/services/timeline/timeline.service";
 import { TimelineEvents } from "@/constants/timeline-events";
 import interviewEvaluationService from "@/services/interview-evaluation.service";
-import behaviorScoreService from "@/services/behavior/behavior-score.service";
+import eventBus from "@/services/events/event-bus.service";
+import { InterviewEvent } from "@/services/events/event-types";
 
 import interviewEngine from "./interview/interview-engine.service";
 import interviewSessionManager from "./interview/interview-session-manager";
@@ -359,11 +360,19 @@ class InterviewService {
       feedback: evaluation.feedback,
     });
 
-    // After AI evaluation is available, update local behavior score service on the server
-    behaviorScoreService.updateEvaluation(
-      evaluation.correctnessScore,
-      evaluation.communicationScore
-    );
+    // Publish ANSWER_EVALUATED event
+    await eventBus.publish({
+      id: `ev_eval_${interviewId}_${context.interview.currentQuestion}_${Date.now()}`,
+      type: InterviewEvent.ANSWER_EVALUATED,
+      interviewId,
+      timestamp: new Date(),
+      payload: {
+        evaluation,
+        questionNumber: context.interview.currentQuestion,
+        question: latestQuestion,
+        answer,
+      },
+    });
 
     await timelineService.create({
       interviewId,
@@ -472,6 +481,15 @@ class InterviewService {
 
       // Interview Ends
       interviewSessionManager.remove(interviewId);
+
+      // Publish INTERVIEW_COMPLETED event
+      await eventBus.publish({
+        id: `ev_comp_${interviewId}_${Date.now()}`,
+        type: InterviewEvent.INTERVIEW_COMPLETED,
+        interviewId,
+        timestamp: new Date(),
+        payload: {},
+      });
     }
 
     return {

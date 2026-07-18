@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import interviewService from "@/services/interview-service";
-import analyticsEngine from "@/services/analytics/analytics-engine.service";
-import reportGeneratorService from "@/services/report/report-generator.service";
 import { InterviewStatus } from "@/app/generated/prisma/enums";
 import timelineService from "@/services/timeline/timeline.service";
 import { TimelineEvents } from "@/constants/timeline-events";
 import interviewSessionManager from "@/services/interview/interview-session-manager";
+import eventBus from "@/services/events/event-bus.service";
+import { InterviewEvent } from "@/services/events/event-types";
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,11 +38,16 @@ export async function POST(req: NextRequest) {
       type: TimelineEvents.INTERVIEW_COMPLETED,
     });
 
-    // Run analytics and generate report
-    await analyticsEngine.generateReport(interviewId);
-    await reportGeneratorService.generate(interviewId);
+    // Publish INTERVIEW_COMPLETED event
+    await eventBus.publish({
+      id: `ev_comp_${interviewId}_${Date.now()}`,
+      type: InterviewEvent.INTERVIEW_COMPLETED,
+      interviewId,
+      timestamp: new Date(),
+      payload: {},
+    });
 
-    console.log(`Interview session finished and report generated for ID: ${interviewId}`);
+    console.log(`Interview session finished and event published for ID: ${interviewId}`);
 
     return NextResponse.json({
       success: true,

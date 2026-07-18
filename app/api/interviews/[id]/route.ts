@@ -1,8 +1,8 @@
 import { requireUser } from "@/lib/auth-user";
 import interviewService from "@/services/interview-service";
 import { NextRequest, NextResponse } from "next/server";
-import analyticsEngine from "@/services/analytics/analytics-engine.service";
-import reportGeneratorService from "@/services/report/report-generator.service";
+import eventBus from "@/services/events/event-bus.service";
+import { InterviewEvent } from "@/services/events/event-types";
 
 type Params = Promise<{ id: string }>;
 
@@ -47,8 +47,13 @@ export async function PATCH(
         const updated = await interviewService.updateInterview(id, body);
 
         if (body.status === "COMPLETED") {
-            await analyticsEngine.generateReport(id);
-            await reportGeneratorService.generate(id);
+            await eventBus.publish({
+                id: `ev_comp_${id}_${Date.now()}`,
+                type: InterviewEvent.INTERVIEW_COMPLETED,
+                interviewId: id,
+                timestamp: new Date(),
+                payload: {},
+            });
         }
 
         return NextResponse.json({

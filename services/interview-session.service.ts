@@ -53,6 +53,16 @@ class InterviewSessionService {
         }
       );
 
+      if (!response.ok) {
+        const text = await response.text();
+        let msg = "Failed to start interview.";
+        try {
+          const parsed = JSON.parse(text);
+          msg = parsed.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+
       const data: StartResponse =
         await response.json();
 
@@ -145,6 +155,16 @@ class InterviewSessionService {
           }),
         }
       );
+
+      if (!response.ok) {
+        const text = await response.text();
+        let msg = "Answer submission failed.";
+        try {
+          const parsed = JSON.parse(text);
+          msg = parsed.message || msg;
+        } catch {}
+        throw new Error(msg);
+      }
 
       const data: AnswerResponse =
         await response.json();

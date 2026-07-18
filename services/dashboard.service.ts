@@ -193,6 +193,10 @@ class DashboardService {
       recommendations,
     };
   }
+
+  async update() {
+    console.log("Dashboard updated.");
+  }
 }
 
 export default new DashboardService();

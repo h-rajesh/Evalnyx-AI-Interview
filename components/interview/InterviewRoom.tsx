@@ -6,6 +6,7 @@ import {
   VideoConference,
 } from "@livekit/components-react";
 import "@livekit/components-styles";
+import InterviewLayout from "./InterviewLayout";
 
 interface InterviewRoomProps {
   token: string;
@@ -18,19 +19,27 @@ export default function InterviewRoom({
 }: InterviewRoomProps) {
   return (
     <LiveKitRoom
-      token={token}
-      serverUrl={serverUrl}
-      connect={true}
-      video={true}
-      audio={true}
-      data-lk-theme="default"
-      style={{
-        height: "100vh",
-        width: "100%",
-      }}
-    >
-      <VideoConference />
-      <RoomAudioRenderer />
-    </LiveKitRoom>
+  token={token}
+  serverUrl={serverUrl}
+  connect
+  video
+  audio
+  data-lk-theme="default"
+  style={{
+    height: "100vh",
+    width: "100%",
+  }}
+>
+    <InterviewLayout>
+
+        {/* Temporary */}
+
+        <VideoConference />
+
+    </InterviewLayout>
+
+    <RoomAudioRenderer />
+
+</LiveKitRoom>
   );
 }
